@@ -85,6 +85,10 @@ def predict_action(explore_start, explore_stop, decay_rate, decay_step, state, a
 
 
 class DQNetwork:
+    '''
+    Cannot update
+    flatten, batch norm, conv2d
+    '''
     def __init__(self, state_size, action_size, learning_rate, name='DQNetwork'):
         self.state_size = state_size
         self.action_size = action_size
@@ -188,7 +192,7 @@ class DQNetwork:
             # Sum(Qtarget - Q)^2
             self.loss = tf.reduce_mean(tf.square(self.target_Q - self.Q))
 
-            self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate).minimize(self.loss)
+            self.optimizer = tf.compat.v1.train.RMSPropOptimizer(self.learning_rate).minimize(self.loss)
 
 
 class Memory:
@@ -287,7 +291,7 @@ log_path = "./models/" + game_mode + "/" + network + "/" + today_date + "-" + cu
 writer = tf.compat.v1.summary.FileWriter("/tensorboard/doom/" + game_mode + "/" + network + "/" + today_date + "/" + current_time)
 
 ## Losses
-tf.summary.scalar("Loss", DQNetwork.loss)
+tf.compat.v1.summary.scalar("Loss", DQNetwork.loss)
 
 write_op = tf.compat.v1.summary.merge_all()
 
@@ -295,7 +299,7 @@ write_op = tf.compat.v1.summary.merge_all()
 saver = tf.compat.v1.train.Saver()
 
 if training:
-    with tf.Session() as sess:
+    with tf.compat.v1.Session() as sess:
         # Initialize the variables # or restore
         #restored_ckpt = "./models/basic/DQN/18-12-2019-12-39-model.ckpt"
         #saver.restore(sess, restored_ckpt)
@@ -371,7 +375,7 @@ if training:
                     log_titles = ['explore_probability', 'total_reward', 'ammo_used', 'monsters_killed', 'accuracy']
                     log_values = [explore_probability, total_reward, ammo_used, monsters_killed, accuracy]
                     for log, values in zip(log_titles, log_values):
-                        summary = tf.Summary(value=[tf.Summary.Value(tag=log, simple_value=values)])
+                        summary = tf.compat.v1.Summary(value=[tf.compat.v1.Summary.Value(tag=log, simple_value=values)])
                         writer.add_summary(summary, episode)
                     write_op = tf.compat.v1.summary.merge_all()
                     writer.flush()
@@ -435,7 +439,7 @@ if training:
                 save_path = saver.save(sess, log_path)
                 print("Model Saved")
 
-with tf.Session() as sess:
+with tf.compat.v1.Session() as sess:
     game, possible_actions = create_environment()
     totalScore = 0
     # Load the model
