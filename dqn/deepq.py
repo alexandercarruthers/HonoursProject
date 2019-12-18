@@ -38,38 +38,6 @@ def preprocess_frame(frame):
     return preprocessed_frame
 
 
-# GAME MODE CHOICE
-game_mode = "basic"  # defend_the_center
-network = "DQN"
-
-game, possible_actions = create_environment()
-
-# MODEL HYPERPARAMETERS
-state_size = [84, 84, 4]  # Our input is a stack of 4 frames hence 84x84x4 (Width, height, channels)
-action_size = game.get_available_buttons_size()  # 3 possible actions: left, right, shoot
-learning_rate = 0.0002  # Alpha (aka learning rate)
-# TRAINING HYPERPARAMETERS
-total_episodes = 1000  # Total episodes for training
-max_steps = 300  # Max possible steps in an episode
-batch_size = 64
-# Exploration parameters for epsilon greedy strategy
-explore_start = 1.0  # exploration probability at start
-explore_stop = 0.01  # minimum exploration probability
-decay_rate = 0.0001  # exponential decay rate for exploration prob
-# Q learning hyperparameters
-gamma = 0.95  # Discounting rate
-# MEMORY HYPERPARAMETERS
-pretrain_length = batch_size  # Number of experiences stored in the Memory when initialized for the first time
-memory_size = 1000000  # Number of experiences the Memory can keep
-# MODIFY THIS TO FALSE IF YOU JUST WANT TO SEE THE TRAINED AGENT
-training = True
-# TURN THIS TO TRUE IF YOU WANT TO RENDER THE ENVIRONMENT
-episode_render = False
-stack_size = 4  # We stack 4 frames
-# Initialize deque with zero-images one array for each image
-stacked_frames = deque([np.zeros((84, 84), dtype=np.int) for i in range(stack_size)], maxlen=4)
-
-
 def stack_frames(stacked_frames, state, is_new_episode):
     # Preprocess frame
     frame = preprocess_frame(state)
@@ -91,21 +59,46 @@ def stack_frames(stacked_frames, state, is_new_episode):
     return stacked_state, stacked_frames
 
 
+def predict_action(explore_start, explore_stop, decay_rate, decay_step, state, actions):
+    # EPSILON GREEDY STRATEGY
+    # Choose action a from state s using epsilon greedy.
+    # First we randomize a number
+    exp_exp_tradeoff = np.random.rand()
+
+    # Here we'll use an improved version of our epsilon greedy strategy used in Q-learning notebook
+    explore_probability = explore_stop + (explore_start - explore_stop) * np.exp(-decay_rate * decay_step)
+
+    if (explore_probability > exp_exp_tradeoff):
+        # Make a random action (exploration)
+        action = random.choice(possible_actions)
+
+    else:
+        # Get action from Q-network (exploitation)
+        # Estimate the Qs values state
+        Qs = sess.run(DQNetwork.output, feed_dict={DQNetwork.inputs_: state.reshape((1, *state.shape))})
+
+        # Take the biggest Q value (= the best action)
+        choice = np.argmax(Qs)
+        action = possible_actions[int(choice)]
+
+    return action, explore_probability
+
+
 class DQNetwork:
     def __init__(self, state_size, action_size, learning_rate, name='DQNetwork'):
         self.state_size = state_size
         self.action_size = action_size
         self.learning_rate = learning_rate
 
-        with tf.variable_scope(name):
+        with tf.compat.v1.variable_scope(name):
             # We create the placeholders
             # *state_size means that we take each elements of state_size in tuple hence is like if we wrote
             # [None, 84, 84, 4]
-            self.inputs_ = tf.placeholder(tf.float32, [None, *state_size], name="inputs")
-            self.actions_ = tf.placeholder(tf.float32, [None, 3], name="actions_")
+            self.inputs_ = tf.compat.v1.placeholder(tf.float32, [None, *state_size], name="inputs")
+            self.actions_ = tf.compat.v1.placeholder(tf.float32, [None, 3], name="actions_")
 
             # Remember that target_Q is the R(s,a) + ymax Qhat(s', a')
-            self.target_Q = tf.placeholder(tf.float32, [None], name="target")
+            self.target_Q = tf.compat.v1.placeholder(tf.float32, [None], name="target")
 
             """
             First convnet:
@@ -198,13 +191,6 @@ class DQNetwork:
             self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate).minimize(self.loss)
 
 
-# Reset the graph
-tf.reset_default_graph()
-
-# Instantiate the DQNetwork
-DQNetwork = DQNetwork(state_size, action_size, learning_rate)
-
-
 class Memory:
     def __init__(self, max_size):
         self.buffer = deque(maxlen=max_size)
@@ -218,6 +204,42 @@ class Memory:
         return [self.buffer[i] for i in index]
 
 
+# GAME MODE CHOICE
+game_mode = "basic"  # defend_the_center
+initial_ammo = 50 # basic = 50 def = 26
+network = "DQN"
+
+game, possible_actions = create_environment()
+
+# MODEL HYPERPARAMETERS
+state_size = [84, 84, 4]  # Our input is a stack of 4 frames hence 84x84x4 (Width, height, channels)
+action_size = game.get_available_buttons_size()  # 3 possible actions: left, right, shoot
+learning_rate = 0.0002  # Alpha (aka learning rate)
+# TRAINING HYPERPARAMETERS
+total_episodes = 100  # Total episodes for training
+max_steps = 300  # Max possible steps in an episode
+batch_size = 64
+# Exploration parameters for epsilon greedy strategy
+explore_start = 1.0  # exploration probability at start
+explore_stop = 0.01  # minimum exploration probability
+decay_rate = 0.0001  # exponential decay rate for exploration prob
+# Q learning hyperparameters
+gamma = 0.95  # Discounting rate
+
+# MEMORY HYPERPARAMETERS
+pretrain_length = batch_size  # Number of experiences stored in the Memory when initialized for the first time
+memory_size = 1000000  # Number of experiences the Memory can keep
+# MODIFY THIS TO FALSE IF YOU JUST WANT TO SEE THE TRAINED AGENT
+training = True
+# TURN THIS TO TRUE IF YOU WANT TO RENDER THE ENVIRONMENT
+episode_render = True
+stack_size = 4  # We stack 4 frames
+# Initialize deque with zero-images one array for each image
+stacked_frames = deque([np.zeros((84, 84), dtype=np.int) for i in range(stack_size)], maxlen=4)
+# Reset the graph
+tf.compat.v1.reset_default_graph()
+# Instantiate the DQNetwork
+DQNetwork = DQNetwork(state_size, action_size, learning_rate)
 # Instantiate memory
 memory = Memory(max_size=memory_size)
 # Render the environment
@@ -229,33 +251,24 @@ for i in range(pretrain_length):
         # First we need a state
         state = game.get_state().screen_buffer
         state, stacked_frames = stack_frames(stacked_frames, state, True)
-
     # Random action
     action = random.choice(possible_actions)
-
     # Get the rewards
     reward = game.make_action(action)
-
     # Look if the episode is finished
     done = game.is_episode_finished()
-
     # If we're dead
     if done:
         # We finished the episode
         next_state = np.zeros(state.shape)
-
         # Add experience to memory
         memory.add((state, action, reward, next_state, done))
-
         # Start a new episode
         game.new_episode()
-
         # First we need a state
         state = game.get_state().screen_buffer
-
         # Stack the frames
         state, stacked_frames = stack_frames(stacked_frames, state, True)
-
     else:
         # Get the next state
         next_state = game.get_state().screen_buffer
@@ -271,46 +284,22 @@ for i in range(pretrain_length):
 today_date = datetime.datetime.now().strftime("%d-%m-%Y")
 current_time = datetime.datetime.now().strftime("%H-%M")
 log_path = "./models/" + game_mode + "/" + network + "/" + today_date + "-" + current_time + "-model.ckpt"
-writer = tf.summary.FileWriter("/tensorboard/doom/" + game_mode + "/" + network + "/" + today_date + "/" + current_time)
+writer = tf.compat.v1.summary.FileWriter("/tensorboard/doom/" + game_mode + "/" + network + "/" + today_date + "/" + current_time)
 
 ## Losses
 tf.summary.scalar("Loss", DQNetwork.loss)
 
-write_op = tf.summary.merge_all()
-
-
-def predict_action(explore_start, explore_stop, decay_rate, decay_step, state, actions):
-    ## EPSILON GREEDY STRATEGY
-    # Choose action a from state s using epsilon greedy.
-    ## First we randomize a number
-    exp_exp_tradeoff = np.random.rand()
-
-    # Here we'll use an improved version of our epsilon greedy strategy used in Q-learning notebook
-    explore_probability = explore_stop + (explore_start - explore_stop) * np.exp(-decay_rate * decay_step)
-
-    if (explore_probability > exp_exp_tradeoff):
-        # Make a random action (exploration)
-        action = random.choice(possible_actions)
-
-    else:
-        # Get action from Q-network (exploitation)
-        # Estimate the Qs values state
-        Qs = sess.run(DQNetwork.output, feed_dict={DQNetwork.inputs_: state.reshape((1, *state.shape))})
-
-        # Take the biggest Q value (= the best action)
-        choice = np.argmax(Qs)
-        action = possible_actions[int(choice)]
-
-    return action, explore_probability
-
+write_op = tf.compat.v1.summary.merge_all()
 
 # Saver will help us to save our model
-saver = tf.train.Saver()
+saver = tf.compat.v1.train.Saver()
 
-if training == True:
+if training:
     with tf.Session() as sess:
-        # Initialize the variables
-        sess.run(tf.global_variables_initializer())
+        # Initialize the variables # or restore
+        #restored_ckpt = "./models/basic/DQN/18-12-2019-12-39-model.ckpt"
+        #saver.restore(sess, restored_ckpt)
+        sess.run(tf.compat.v1.global_variables_initializer())
 
         # Initialize the decay rate (that will use to reduce epsilon) 
         decay_step = 0
@@ -365,7 +354,7 @@ if training == True:
                     # Get the total reward of the episode
                     total_reward = np.sum(episode_rewards)
                     # calculate ammo used against the ammo player started with
-                    initial_ammo = 50
+
                     ammo_used = initial_ammo - last_ammo_value
                     accuracy = (monsters_killed / ammo_used) * 100
                     print('Episode: {}'.format(episode),
@@ -379,28 +368,12 @@ if training == True:
 
                     memory.add((state, action, reward, next_state, done))
 
-                    # log explore p
-                    summary1 = tf.Summary()
-                    summary1.value.add(tag='explore_probability', simple_value=explore_probability)
-                    writer.add_summary(summary1, episode)
-                    # log total reward
-                    summary1 = tf.Summary()
-                    summary1.value.add(tag='total_reward', simple_value=total_reward)
-                    writer.add_summary(summary1, episode)
-                    # log ammo used
-                    summary1 = tf.Summary()
-                    summary1.value.add(tag='ammo_used', simple_value=ammo_used)
-                    writer.add_summary(summary1, episode)
-                    # log monsters killed per episode
-                    summary1 = tf.Summary()
-                    summary1.value.add(tag='monsters_killed', simple_value=monsters_killed)
-                    writer.add_summary(summary1, episode)
-                    # log accuracy episode
-                    summary1 = tf.Summary()
-                    summary1.value.add(tag='accuracy', simple_value=accuracy)
-                    writer.add_summary(summary1, episode)
-
-                    write_op = tf.summary.merge_all()
+                    log_titles = ['explore_probability', 'total_reward', 'ammo_used', 'monsters_killed', 'accuracy']
+                    log_values = [explore_probability, total_reward, ammo_used, monsters_killed, accuracy]
+                    for log, values in zip(log_titles, log_values):
+                        summary = tf.Summary(value=[tf.Summary.Value(tag=log, simple_value=values)])
+                        writer.add_summary(summary, episode)
+                    write_op = tf.compat.v1.summary.merge_all()
                     writer.flush()
                 else:
                     last_ammo_value = game.get_state().game_variables[0]
@@ -464,42 +437,31 @@ if training == True:
 
 with tf.Session() as sess:
     game, possible_actions = create_environment()
-
     totalScore = 0
-
     # Load the model
     saver.restore(sess, "./models/model.ckpt")
     game.init()
     for i in range(1):
-
         done = False
-
         game.new_episode()
-
         state = game.get_state().screen_buffer
         state, stacked_frames = stack_frames(stacked_frames, state, True)
-
         while not game.is_episode_finished():
             # Take the biggest Q value (= the best action)
             Qs = sess.run(DQNetwork.output, feed_dict={DQNetwork.inputs_: state.reshape((1, *state.shape))})
-
             # Take the biggest Q value (= the best action)
             choice = np.argmax(Qs)
             action = possible_actions[int(choice)]
-
             game.make_action(action)
             done = game.is_episode_finished()
             score = game.get_total_reward()
-
             if done:
                 break
-
             else:
                 print("else")
                 next_state = game.get_state().screen_buffer
                 next_state, stacked_frames = stack_frames(stacked_frames, next_state, False)
                 state = next_state
-
         score = game.get_total_reward()
         print("Score: ", score)
     game.close()
