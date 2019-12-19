@@ -6,7 +6,7 @@ import random  # Handling random number generation
 from skimage import transform  # Help us to preprocess the frames
 from collections import deque  # Ordered collection with ends
 import warnings  # This ignore all the warning messages that are normally printed during the training because of skimage
-
+import json # for hyperparameters
 warnings.filterwarnings('ignore')
 
 
@@ -224,12 +224,14 @@ if text == "1":
     date = input("DD-MM-YYYY: ")
     time = input("HH-MM: ")
     log_path = "./models/" + game_mode + "/" + network + "/" + date + "-" + time + "-model.ckpt"
+    json_log = "./models/" + game_mode + "/" + network + "/" + date + "-" + time + "log.txt"
     writer = tf.compat.v1.summary.FileWriter("/tensorboard/" + game_mode + "/" + network + "/" + date + "/" + time)
     new = False
 if text == "2":
     today_date = datetime.datetime.now().strftime("%d-%m-%Y")
     current_time = datetime.datetime.now().strftime("%H-%M")
     log_path = "./models/" + game_mode + "/" + network + "/" + today_date + "-" + current_time + "-model.ckpt"
+    json_log = "./models/" + game_mode + "/" + network + "/" + today_date + "-" + current_time + "log.txt"
     writer = tf.compat.v1.summary.FileWriter("/tensorboard/" + game_mode + "/" + network + "/" + today_date + "/" + current_time)
     new = True
 if text == "3":
@@ -237,25 +239,27 @@ if text == "3":
 
 
 game, possible_actions = create_environment()
-
+# PREVIOUS PARAMETERS
+last_episode = 0
+last_explore_start = 0
 # MODEL HYPERPARAMETERS
 state_size = [84, 84, 4]  # Our input is a stack of 4 frames hence 84x84x4 (Width, height, channels)
 action_size = game.get_available_buttons_size()  # 3 possible actions: left, right, shoot
 learning_rate = 0.0002  # Alpha (aka learning rate)
 # TRAINING HYPERPARAMETERS
-total_episodes = 300  # Total episodes for training
+total_episodes = 900  # Total episodes for training
 max_steps = 300  # Max possible steps in an episode
-batch_size = 128
+batch_size = 16
 # Exploration parameters for epsilon greedy strategy
 explore_start = 1.0  # exploration probability at start
 explore_stop = 0.01  # minimum exploration probability
-decay_rate = 0.1 #00 #0  # exponential decay rate for exploration prob
+decay_rate = 0.00001 #00 #0  # exponential decay rate for exploration prob
 # Q learning hyperparameters
 gamma = 0.95  # Discounting rate
 
 # MEMORY HYPERPARAMETERS
 pretrain_length = batch_size  # Number of experiences stored in the Memory when initialized for the first time
-memory_size = 1000000  # Number of experiences the Memory can keep
+memory_size = 1000000  # Number of experiences the Memory can keep 1 million
 # MODIFY THIS TO FALSE IF YOU JUST WANT TO SEE THE TRAINED AGENT
 training = True
 # TURN THIS TO TRUE IF YOU WANT TO RENDER THE ENVIRONMENT
@@ -307,13 +311,6 @@ for i in range(pretrain_length):
         # Our state is now the next_state
         state = next_state
 
-# Setup TensorBoard Writer
-#log_path = "./models/" + game_mode + "/" + network + "/" + today_date + "-" + current_time + "-model.ckpt"
-#restored_ckpt = "./models/basic/DQN/18-12-2019-14-57-model.ckpt"
-#log_path = restored_ckpt
-
-#restored
-#writer = tf.compat.v1.summary.FileWriter("/tensorboard/" + game_mode + "/" + network + "/" + "18-12-2019" + "/" + "14-57")
 ## Losses
 tf.compat.v1.summary.scalar("Loss", DQNetwork.loss)
 
@@ -324,20 +321,25 @@ saver = tf.compat.v1.train.Saver()
 
 if training:
     with tf.compat.v1.Session() as sess:
+        # Initialize the variables # or restore
         if new == True:
             sess.run(tf.compat.v1.global_variables_initializer())
+            last_episode = 0
         if new == False:
             saver.restore(sess, log_path)
-        # Initialize the variables # or restore
-        #restored_ckpt = "./models/basic/DQN/18-12-2019-12-39-model.ckpt"
+            # restore last hyper parameters
+            lines = [line.rstrip('\n') for line in open(json_log)]
+            last_line = json.loads(lines[-1])
+            last_episode = last_line['episode']
+            last_explore_start = last_line['explore_probability']
+            explore_start = last_explore_start
 
-        # Initialize the decay rate (that will use to reduce epsilon) 
+            # Initialize the decay rate (that will use to reduce epsilon)
         decay_step = 0
-
         # Init the game
         game.init()
-
-        for episode in range(total_episodes):
+        next_episode = last_episode + 1
+        for episode in range(next_episode, total_episodes + next_episode):
             # Set step to 0
             step = 0
             # Initialize the rewards of the episode
@@ -389,6 +391,12 @@ if training:
                         writer.add_summary(summary, episode)
                     write_op = tf.compat.v1.summary.merge_all()
                     writer.flush()
+                    # write to .txt in json
+                    hyperparameter_data = {'episode': episode, 'explore_probability': explore_probability, 'total_reward': total_reward, 'ammo_used': ammo_used, 'monsters_killed': monsters_killed, 'accuracy': accuracy}
+                    y = json.dumps(hyperparameter_data)
+                    with open(json_log, 'a') as outfile:
+                        outfile.write(y)
+                        outfile.write("\n")
                 else:
                     last_ammo_value = game.get_state().game_variables[0]
                     monsters_killed = game.get_state().game_variables[2]
@@ -440,13 +448,14 @@ if training:
                 save_path = saver.save(sess, log_path) # log path from restored
                 print("Model Saved")
 
+
 with tf.compat.v1.Session() as sess:
     game, possible_actions = create_environment()
     totalScore = 0
     # Load the model
     saver.restore(sess, log_path)
     game.init()
-    for i in range(1):
+    for i in range(10):
         done = False
         game.new_episode()
         state = game.get_state().screen_buffer
@@ -463,7 +472,6 @@ with tf.compat.v1.Session() as sess:
             if done:
                 break
             else:
-                print("else")
                 next_state = game.get_state().screen_buffer
                 next_state, stacked_frames = stack_frames(stacked_frames, next_state, False)
                 state = next_state
