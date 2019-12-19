@@ -212,6 +212,29 @@ class Memory:
 game_mode = "basic"  # defend_the_center
 initial_ammo = 50 # basic = 50 def = 26
 network = "DQN"
+new = False
+
+text = input("1 to load previous checkpoint\n"
+             "2 for new model\n"
+             "3 exit\n")
+if text == "1":
+    print("checkpoint name in format ./models/gamemode/network/DD-MM-YY-HH-MM-model.ckpt")
+    game_mode = input("game mode: ")
+    network = input("network: ")
+    date = input("DD-MM-YYYY: ")
+    time = input("HH-MM: ")
+    log_path = "./models/" + game_mode + "/" + network + "/" + date + "-" + time + "-model.ckpt"
+    writer = tf.compat.v1.summary.FileWriter("/tensorboard/" + game_mode + "/" + network + "/" + date + "/" + time)
+    new = False
+if text == "2":
+    today_date = datetime.datetime.now().strftime("%d-%m-%Y")
+    current_time = datetime.datetime.now().strftime("%H-%M")
+    log_path = "./models/" + game_mode + "/" + network + "/" + today_date + "-" + current_time + "-model.ckpt"
+    writer = tf.compat.v1.summary.FileWriter("/tensorboard/" + game_mode + "/" + network + "/" + today_date + "/" + current_time)
+    new = True
+if text == "3":
+    exit()
+
 
 game, possible_actions = create_environment()
 
@@ -220,13 +243,13 @@ state_size = [84, 84, 4]  # Our input is a stack of 4 frames hence 84x84x4 (Widt
 action_size = game.get_available_buttons_size()  # 3 possible actions: left, right, shoot
 learning_rate = 0.0002  # Alpha (aka learning rate)
 # TRAINING HYPERPARAMETERS
-total_episodes = 100  # Total episodes for training
+total_episodes = 300  # Total episodes for training
 max_steps = 300  # Max possible steps in an episode
-batch_size = 64
+batch_size = 128
 # Exploration parameters for epsilon greedy strategy
 explore_start = 1.0  # exploration probability at start
 explore_stop = 0.01  # minimum exploration probability
-decay_rate = 0.0001  # exponential decay rate for exploration prob
+decay_rate = 0.1 #00 #0  # exponential decay rate for exploration prob
 # Q learning hyperparameters
 gamma = 0.95  # Discounting rate
 
@@ -285,11 +308,12 @@ for i in range(pretrain_length):
         state = next_state
 
 # Setup TensorBoard Writer
-today_date = datetime.datetime.now().strftime("%d-%m-%Y")
-current_time = datetime.datetime.now().strftime("%H-%M")
-log_path = "./models/" + game_mode + "/" + network + "/" + today_date + "-" + current_time + "-model.ckpt"
-writer = tf.compat.v1.summary.FileWriter("/tensorboard/doom/" + game_mode + "/" + network + "/" + today_date + "/" + current_time)
+#log_path = "./models/" + game_mode + "/" + network + "/" + today_date + "-" + current_time + "-model.ckpt"
+#restored_ckpt = "./models/basic/DQN/18-12-2019-14-57-model.ckpt"
+#log_path = restored_ckpt
 
+#restored
+#writer = tf.compat.v1.summary.FileWriter("/tensorboard/" + game_mode + "/" + network + "/" + "18-12-2019" + "/" + "14-57")
 ## Losses
 tf.compat.v1.summary.scalar("Loss", DQNetwork.loss)
 
@@ -300,10 +324,12 @@ saver = tf.compat.v1.train.Saver()
 
 if training:
     with tf.compat.v1.Session() as sess:
+        if new == True:
+            sess.run(tf.compat.v1.global_variables_initializer())
+        if new == False:
+            saver.restore(sess, log_path)
         # Initialize the variables # or restore
         #restored_ckpt = "./models/basic/DQN/18-12-2019-12-39-model.ckpt"
-        #saver.restore(sess, restored_ckpt)
-        sess.run(tf.compat.v1.global_variables_initializer())
 
         # Initialize the decay rate (that will use to reduce epsilon) 
         decay_step = 0
@@ -314,51 +340,37 @@ if training:
         for episode in range(total_episodes):
             # Set step to 0
             step = 0
-
             # Initialize the rewards of the episode
             episode_rewards = []
-
             # Make a new episode and observe the first state
             game.new_episode()
             state = game.get_state().screen_buffer
-
             # Remember that stack frame function also call our preprocess function.
             state, stacked_frames = stack_frames(stacked_frames, state, True)
-
             last_ammo_value = 0
             monsters_killed = 0
             while step < max_steps:
                 step += 1
-
                 # Increase decay_step
                 decay_step += 1
-
                 # Predict the action to take and take it
-                action, explore_probability = predict_action(explore_start, explore_stop, decay_rate, decay_step, state,
-                                                             possible_actions)
-
+                action, explore_probability = predict_action(explore_start, explore_stop, decay_rate, decay_step, state, possible_actions)
                 # Do the action
                 reward = game.make_action(action)
-
                 # Look if the episode is finished
                 done = game.is_episode_finished()
-
                 # Add the reward to total reward
                 episode_rewards.append(reward)
-
                 # If the game is finished
                 if done:
                     # the episode ends so no next state
                     next_state = np.zeros((84, 84), dtype=np.int)
                     next_state, stacked_frames = stack_frames(stacked_frames, next_state, False)
-
                     # Set step = max_steps to end the episode
                     step = max_steps
-
                     # Get the total reward of the episode
                     total_reward = np.sum(episode_rewards)
                     # calculate ammo used against the ammo player started with
-
                     ammo_used = initial_ammo - last_ammo_value
                     accuracy = (monsters_killed / ammo_used) * 100
                     print('Episode: {}'.format(episode),
@@ -367,11 +379,9 @@ if training:
                           'Explore P: {:.4f}'.format(explore_probability),
                           'Ammo used: {:.4f}'.format(ammo_used),
                           'monsters killed: {:.4f}'.format(monsters_killed),
-                          'Accuracy: {:.4f}'.format(accuracy)
-                          )
-
+                          'Accuracy: {:.4f}'.format(accuracy))
                     memory.add((state, action, reward, next_state, done))
-
+                    # Log episode data
                     log_titles = ['explore_probability', 'total_reward', 'ammo_used', 'monsters_killed', 'accuracy']
                     log_values = [explore_probability, total_reward, ammo_used, monsters_killed, accuracy]
                     for log, values in zip(log_titles, log_values):
@@ -384,17 +394,13 @@ if training:
                     monsters_killed = game.get_state().game_variables[2]
                     # Get the next state
                     next_state = game.get_state().screen_buffer
-
                     # Stack the frame of the next_state
                     next_state, stacked_frames = stack_frames(stacked_frames, next_state, False)
-
                     # Add experience to memory
                     memory.add((state, action, reward, next_state, done))
-
                     # st+1 is now our current state
                     state = next_state
-
-                ### LEARNING PART
+                # LEARNING PART
                 # Obtain random mini-batch from memory
                 batch = memory.sample(batch_size)
                 states_mb = np.array([each[0] for each in batch], ndmin=3)
@@ -402,20 +408,15 @@ if training:
                 rewards_mb = np.array([each[2] for each in batch])
                 next_states_mb = np.array([each[3] for each in batch], ndmin=3)
                 dones_mb = np.array([each[4] for each in batch])
-
                 target_Qs_batch = []
-
                 # Get Q values for next_state
                 Qs_next_state = sess.run(DQNetwork.output, feed_dict={DQNetwork.inputs_: next_states_mb})
-
                 # Set Q_target = r if the episode ends at s+1, otherwise set Q_target = r + gamma*maxQ(s', a')
                 for i in range(0, len(batch)):
                     terminal = dones_mb[i]
-
                     # If we are in a terminal state, only equals reward
                     if terminal:
                         target_Qs_batch.append(rewards_mb[i])
-
                     else:
                         target = rewards_mb[i] + gamma * np.max(Qs_next_state[i])
                         target_Qs_batch.append(target)
@@ -436,14 +437,14 @@ if training:
 
             # Save model every 5 episodes
             if episode % 5 == 0:
-                save_path = saver.save(sess, log_path)
+                save_path = saver.save(sess, log_path) # log path from restored
                 print("Model Saved")
 
 with tf.compat.v1.Session() as sess:
     game, possible_actions = create_environment()
     totalScore = 0
     # Load the model
-    saver.restore(sess, "./models/model.ckpt")
+    saver.restore(sess, log_path)
     game.init()
     for i in range(1):
         done = False
