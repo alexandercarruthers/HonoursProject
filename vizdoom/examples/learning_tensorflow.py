@@ -32,7 +32,7 @@ resolution = (30, 45)
 episodes_to_watch = 10
 
 
-# TODO move to argparser
+
 save_model = True
 load_model = False
 skip_learning = False

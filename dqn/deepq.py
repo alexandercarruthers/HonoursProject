@@ -1,12 +1,15 @@
 import datetime  # Logging
 import tensorflow as tf  # Deep Learning library
+
 import numpy as np  # Handle matrices
 import vizdoom
 import random  # Handling random number generation
 from skimage import transform  # Help us to preprocess the frames
 from collections import deque  # Ordered collection with ends
 import warnings  # This ignore all the warning messages that are normally printed during the training because of skimage
-import json # for hyperparameters
+import json  # for hyperparameters
+import shared
+
 warnings.filterwarnings('ignore')
 
 
@@ -30,7 +33,7 @@ def preprocess_frame(frame):
     # Greyscale frame already done in our vizdoom config
     # x = np.mean(frame,-1)
     # Crop the screen (remove the roof because it contains no information)
-    cropped_frame = frame[30:-10, 30:-30]
+    cropped_frame = frame  # frame[30:-10, 30:-30]
     # Normalize Pixel Values
     normalized_frame = cropped_frame / 255.0
     # Resize
@@ -89,6 +92,7 @@ class DQNetwork:
     Cannot update
     flatten, batch norm, conv2d
     '''
+
     def __init__(self, state_size, action_size, learning_rate, name='DQNetwork'):
         self.state_size = state_size
         self.action_size = action_size
@@ -100,75 +104,29 @@ class DQNetwork:
             # [None, 84, 84, 4]
             self.inputs_ = tf.compat.v1.placeholder(tf.float32, [None, *state_size], name="inputs")
             self.actions_ = tf.compat.v1.placeholder(tf.float32, [None, 3], name="actions_")
-
             # Remember that target_Q is the R(s,a) + ymax Qhat(s', a')
             self.target_Q = tf.compat.v1.placeholder(tf.float32, [None], name="target")
-
-            """
-            First convnet:
-            CNN
-            BatchNormalization
-            ELU
-            """
+            # First convnet: CNN ReLU
             # Input is 84x84x4
-            self.conv1 = tf.layers.conv2d(inputs=self.inputs_,
-                                          filters=32,
-                                          kernel_size=[8, 8],
-                                          strides=[4, 4],
+            self.conv1 = tf.layers.conv2d(inputs=self.inputs_, filters=32, kernel_size=[8, 8], strides=[4, 4],
                                           padding="VALID",
                                           kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
                                           name="conv1")
-
-            self.conv1_batchnorm = tf.layers.batch_normalization(self.conv1,
-                                                                 training=True,
-                                                                 epsilon=1e-5,
-                                                                 name='batch_norm1')
-
-            self.conv1_out = tf.nn.elu(self.conv1_batchnorm, name="conv1_out")
-            ## --> [20, 20, 32]
-
-            """
-            Second convnet:
-            CNN
-            BatchNormalization
-            ELU
-            """
-            self.conv2 = tf.layers.conv2d(inputs=self.conv1_out,
-                                          filters=64,
-                                          kernel_size=[4, 4],
-                                          strides=[2, 2],
+            self.conv1_out = tf.nn.relu(self.conv1, name="conv1_out")
+            # Output --> [20, 20, 32]
+            # Second convnet: CNN ReLU
+            self.conv2 = tf.layers.conv2d(inputs=self.conv1_out, filters=64, kernel_size=[4, 4], strides=[2, 2],
                                           padding="VALID",
                                           kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
                                           name="conv2")
-
-            self.conv2_batchnorm = tf.layers.batch_normalization(self.conv2,
-                                                                 training=True,
-                                                                 epsilon=1e-5,
-                                                                 name='batch_norm2')
-
-            self.conv2_out = tf.nn.elu(self.conv2_batchnorm, name="conv2_out")
+            self.conv2_out = tf.nn.relu(self.conv2, name="conv2_out")
             ## --> [9, 9, 64]
-
-            """
-            Third convnet:
-            CNN
-            BatchNormalization
-            ELU
-            """
-            self.conv3 = tf.layers.conv2d(inputs=self.conv2_out,
-                                          filters=128,
-                                          kernel_size=[4, 4],
-                                          strides=[2, 2],
+            # Third convnet: CNN ReLU
+            self.conv3 = tf.layers.conv2d(inputs=self.conv2_out, filters=64, kernel_size=[3, 3], strides=[1, 1],
                                           padding="VALID",
                                           kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
                                           name="conv3")
-
-            self.conv3_batchnorm = tf.layers.batch_normalization(self.conv3,
-                                                                 training=True,
-                                                                 epsilon=1e-5,
-                                                                 name='batch_norm3')
-
-            self.conv3_out = tf.nn.elu(self.conv3_batchnorm, name="conv3_out")
+            self.conv3_out = tf.nn.relu(self.conv3, name="conv3_out")
             ## --> [3, 3, 128]
 
             self.flatten = tf.layers.flatten(self.conv3_out)
@@ -176,7 +134,7 @@ class DQNetwork:
 
             self.fc = tf.layers.dense(inputs=self.flatten,
                                       units=512,
-                                      activation=tf.nn.elu,
+                                      activation=tf.nn.relu,
                                       kernel_initializer=tf.contrib.layers.xavier_initializer(),
                                       name="fc1")
 
@@ -209,8 +167,8 @@ class Memory:
 
 
 # GAME MODE CHOICE
-game_mode = "defend_the_center"  # defend_the_center
-initial_ammo = 26 # basic = 50 def = 26
+game_mode = ""  # defend_the_center
+initial_ammo = 0  # basic = 50 def = 26
 network = "DQN"
 new = False
 
@@ -228,15 +186,23 @@ if text == "1":
     writer = tf.compat.v1.summary.FileWriter("/tensorboard/" + game_mode + "/" + network + "/" + date + "/" + time)
     new = False
 if text == "2":
+    game_choice = input("1 basic\n"
+                        "2 defend_the_center\n")
+    if game_choice == "1":
+        game_mode = "basic"
+        initial_ammo = 50
+    if game_choice == "2":
+        game_mode = "defend_the_center"
+        initial_ammo = 26
     today_date = datetime.datetime.now().strftime("%d-%m-%Y")
     current_time = datetime.datetime.now().strftime("%H-%M")
     log_path = "./models/" + game_mode + "/" + network + "/" + today_date + "-" + current_time + "-model.ckpt"
     json_log = "./models/" + game_mode + "/" + network + "/" + today_date + "-" + current_time + "log.txt"
-    writer = tf.compat.v1.summary.FileWriter("/tensorboard/" + game_mode + "/" + network + "/" + today_date + "/" + current_time)
+    writer = tf.compat.v1.summary.FileWriter(
+        "/tensorboard/" + game_mode + "/" + network + "/" + today_date + "/" + current_time)
     new = True
 if text == "3":
     exit()
-
 
 game, possible_actions = create_environment()
 # PREVIOUS PARAMETERS
@@ -245,15 +211,15 @@ last_explore_start = 0
 # MODEL HYPERPARAMETERS
 state_size = [84, 84, 4]  # Our input is a stack of 4 frames hence 84x84x4 (Width, height, channels)
 action_size = game.get_available_buttons_size()  # 3 possible actions: left, right, shoot
-learning_rate = 0.0002  # Alpha (aka learning rate)
+learning_rate = 0.00025  # Alpha (aka learning rate)
 # TRAINING HYPERPARAMETERS
-total_episodes = 1000  # Total episodes for training
-max_steps = 2100  # Max possible steps in an episode
+total_episodes = 500  # Total episodes for training
+max_steps = 300  # Max possible steps in an episode
 batch_size = 32
 # Exploration parameters for epsilon greedy strategy
 explore_start = 1.0  # exploration probability at start
 explore_stop = 0.01  # minimum exploration probability
-decay_rate = 0.0001 #00 #0  # exponential decay rate for exploration prob
+decay_rate = 0.0001  # 00 #0  # exponential decay rate for exploration prob
 # Q learning hyperparameters
 gamma = 0.99  # Discounting rate
 
@@ -356,7 +322,8 @@ if training:
                 # Increase decay_step
                 decay_step += 1
                 # Predict the action to take and take it
-                action, explore_probability = predict_action(explore_start, explore_stop, decay_rate, decay_step, state, possible_actions)
+                action, explore_probability = predict_action(explore_start, explore_stop, decay_rate, decay_step, state,
+                                                             possible_actions)
                 # Do the action
                 reward = game.make_action(action)
                 # Look if the episode is finished
@@ -372,31 +339,19 @@ if training:
                     step = max_steps
                     # Get the total reward of the episode
                     total_reward = np.sum(episode_rewards)
+                    memory.add((state, action, reward, next_state, done))
                     # calculate ammo used against the ammo player started with
                     ammo_used = initial_ammo - last_ammo_value
-                    accuracy = (monsters_killed / ammo_used) * 100
-                    print('Episode: {}'.format(episode),
-                          'Total reward: {}'.format(total_reward),
-                          'Training loss: {:.4f}'.format(loss),
-                          'Explore P: {:.4f}'.format(explore_probability),
-                          'Ammo used: {:.4f}'.format(ammo_used),
-                          'monsters killed: {:.4f}'.format(monsters_killed),
-                          'Accuracy: {:.4f}'.format(accuracy))
-                    memory.add((state, action, reward, next_state, done))
-                    # Log episode data
-                    log_titles = ['explore_probability', 'total_reward', 'ammo_used', 'monsters_killed', 'accuracy']
-                    log_values = [explore_probability, total_reward, ammo_used, monsters_killed, accuracy]
-                    for log, values in zip(log_titles, log_values):
-                        summary = tf.compat.v1.Summary(value=[tf.compat.v1.Summary.Value(tag=log, simple_value=values)])
-                        writer.add_summary(summary, episode)
-                    write_op = tf.compat.v1.summary.merge_all()
-                    writer.flush()
-                    # write to .txt in json
-                    hyperparameter_data = {'episode': episode, 'explore_probability': explore_probability, 'total_reward': total_reward, 'ammo_used': ammo_used, 'monsters_killed': monsters_killed, 'accuracy': accuracy, 'date': datetime.datetime.now().strftime("%d-%m-%Y"), 'time': datetime.datetime.now().strftime("%H-%M")}
-                    y = json.dumps(hyperparameter_data)
-                    with open(json_log, 'a') as outfile:
-                        outfile.write(y)
-                        outfile.write("\n")
+                    accuracy = shared.calculate_accuracy(monsters_killed, ammo_used)
+                    # log to std out
+                    shared.log_episode_std_out(loss, episode, explore_probability, total_reward, ammo_used,
+                                               monsters_killed, accuracy)
+                    # Log to tensorboard
+                    shared.log_episode_tensorboard(writer, episode, explore_probability, total_reward, ammo_used,
+                                                   monsters_killed, accuracy)
+                    # Log to txt file in json
+                    shared.log_episode(json_log, episode, explore_probability, total_reward, ammo_used, monsters_killed,
+                                       accuracy)
                 else:
                     last_ammo_value = game.get_state().game_variables[0]
                     monsters_killed = game.get_state().game_variables[2]
@@ -445,9 +400,8 @@ if training:
 
             # Save model every 5 episodes
             if episode % 5 == 0:
-                save_path = saver.save(sess, log_path) # log path from restored
+                save_path = saver.save(sess, log_path)  # log path from restored
                 print("Model Saved")
-
 
 with tf.compat.v1.Session() as sess:
     game, possible_actions = create_environment()
