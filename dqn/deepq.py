@@ -209,8 +209,8 @@ class Memory:
 
 
 # GAME MODE CHOICE
-game_mode = "basic"  # defend_the_center
-initial_ammo = 50 # basic = 50 def = 26
+game_mode = "defend_the_center"  # defend_the_center
+initial_ammo = 26 # basic = 50 def = 26
 network = "DQN"
 new = False
 
@@ -247,15 +247,15 @@ state_size = [84, 84, 4]  # Our input is a stack of 4 frames hence 84x84x4 (Widt
 action_size = game.get_available_buttons_size()  # 3 possible actions: left, right, shoot
 learning_rate = 0.0002  # Alpha (aka learning rate)
 # TRAINING HYPERPARAMETERS
-total_episodes = 900  # Total episodes for training
-max_steps = 300  # Max possible steps in an episode
-batch_size = 16
+total_episodes = 1000  # Total episodes for training
+max_steps = 2100  # Max possible steps in an episode
+batch_size = 32
 # Exploration parameters for epsilon greedy strategy
 explore_start = 1.0  # exploration probability at start
 explore_stop = 0.01  # minimum exploration probability
-decay_rate = 0.00001 #00 #0  # exponential decay rate for exploration prob
+decay_rate = 0.0001 #00 #0  # exponential decay rate for exploration prob
 # Q learning hyperparameters
-gamma = 0.95  # Discounting rate
+gamma = 0.99  # Discounting rate
 
 # MEMORY HYPERPARAMETERS
 pretrain_length = batch_size  # Number of experiences stored in the Memory when initialized for the first time
@@ -392,7 +392,7 @@ if training:
                     write_op = tf.compat.v1.summary.merge_all()
                     writer.flush()
                     # write to .txt in json
-                    hyperparameter_data = {'episode': episode, 'explore_probability': explore_probability, 'total_reward': total_reward, 'ammo_used': ammo_used, 'monsters_killed': monsters_killed, 'accuracy': accuracy}
+                    hyperparameter_data = {'episode': episode, 'explore_probability': explore_probability, 'total_reward': total_reward, 'ammo_used': ammo_used, 'monsters_killed': monsters_killed, 'accuracy': accuracy, 'date': datetime.datetime.now().strftime("%d-%m-%Y"), 'time': datetime.datetime.now().strftime("%H-%M")}
                     y = json.dumps(hyperparameter_data)
                     with open(json_log, 'a') as outfile:
                         outfile.write(y)
