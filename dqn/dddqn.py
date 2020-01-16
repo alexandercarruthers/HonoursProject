@@ -8,18 +8,64 @@ from skimage import transform  # Help us to preprocess the frames
 
 from collections import deque  # Ordered collection with ends
 import matplotlib.pyplot as plt  # Display graphs
-
-import \
-    warnings  # This ignore all the warning messages that are normally printed during the training because of skiimage
+import json  # for hyperparameters
+import warnings  # ignore all the warning messages that are normally printed during the training because of skiimage
 import shared
 import datetime
 warnings.filterwarnings('ignore')
 
-game_mode = "basic"  # defend_the_center
-initial_ammo = 50
-current_date = datetime.datetime.now().strftime("%d-%m-%Y")
-current_time = datetime.datetime.now().strftime("%H-%M")
-json_log = "./models/" + game_mode + "/" + "DDDQN" + "/" + current_date + "-" + current_time + "log.txt"
+#game_mode = "basic"  # defend_the_center
+#initial_ammo = 50
+#current_date = datetime.datetime.now().strftime("%d-%m-%Y")
+#current_time = datetime.datetime.now().strftime("%H-%M")
+#json_log = "./models/" + game_mode + "/" + "DDDQN" + "/" + current_date + "-" + current_time + "log.txt"
+
+# GAME MODE CHOICE
+game_mode = ""  # defend_the_center
+initial_ammo = 0  # basic = 50 def = 26
+network = "DDDQN"
+new = False
+
+text = input("1 to load previous checkpoint\n"
+             "2 for new model\n"
+             "3 exit\n")
+if text == "1":
+    print("checkpoint name in format ./models/gamemode/network/DD-MM-YY-HH-MM-model.ckpt")
+    #game_mode = input("game mode: ")
+    game_choice = input("1 basic\n"
+                        "2 defend_the_center\n")
+    if game_choice == "1":
+        game_mode = "basic"
+        initial_ammo = 50
+    if game_choice == "2":
+        game_mode = "defend_the_center"
+        initial_ammo = 26
+    network = input("network: ")
+    date = input("DD-MM-YYYY: ")
+    time = input("HH-MM: ")
+    log_path = "./models/" + game_mode + "/" + network + "/" + date + "-" + time + "-model.ckpt"
+    json_log = "./models/" + game_mode + "/" + network + "/" + date + "-" + time + "log.txt"
+    writer = tf.compat.v1.summary.FileWriter("/tensorboard/" + game_mode + "/" + network + "/" + date + "/" + time)
+    new = False
+if text == "2":
+    game_choice = input("1 basic\n"
+                        "2 defend_the_center\n")
+    if game_choice == "1":
+        game_mode = "basic"
+        initial_ammo = 50
+    if game_choice == "2":
+        game_mode = "defend_the_center"
+        initial_ammo = 26
+    today_date = datetime.datetime.now().strftime("%d-%m-%Y")
+    current_time = datetime.datetime.now().strftime("%H-%M")
+    log_path = "./models/" + game_mode + "/" + network + "/" + today_date + "-" + current_time + "-model.ckpt"
+    json_log = "./models/" + game_mode + "/" + network + "/" + today_date + "-" + current_time + "log.txt"
+    writer = tf.compat.v1.summary.FileWriter(
+        "/tensorboard/" + game_mode + "/" + network + "/" + today_date + "/" + current_time)
+    new = True
+if text == "3":
+    exit()
+
 def create_environment():
     game = vizdoom.DoomGame()
 
@@ -43,7 +89,40 @@ def create_environment():
 
 
 game, possible_actions = create_environment()
+# PREVIOUS PARAMETERS
+last_episode = 0
+last_explore_start = 0
+### MODEL HYPERPARAMETERS
+state_size = [84, 84, 4]  # Our input is a stack of 4 frames hence 100x120x4 (Width, height, channels)
+action_size = game.get_available_buttons_size()  # 7 possible actions
+learning_rate = 0.00025  # Alpha (aka learning rate)
 
+### TRAINING HYPERPARAMETERS
+total_episodes = 500  # Total episodes for training
+max_steps = 300  # Max possible steps in an episode
+batch_size = 32
+
+# FIXED Q TARGETS HYPERPARAMETERS
+max_tau = 10000  # Tau is the C step where we update our target network
+
+# EXPLORATION HYPERPARAMETERS for epsilon greedy strategy
+explore_start = 1.0  # exploration probability at start
+explore_stop = 0.01  # minimum exploration probability
+decay_rate = 0.0001#0.00005  # exponential decay rate for exploration prob
+
+# Q LEARNING hyperparameters
+gamma = 0.99  # Discounting rate
+
+### MEMORY HYPERPARAMETERS
+## If you have GPU change to 1million
+pretrain_length = batch_size #100000  # Number of experiences stored in the Memory when initialized for the first time
+memory_size = 1000000  # Number of experiences the Memory can keep
+
+### MODIFY THIS TO FALSE IF YOU JUST WANT TO SEE THE TRAINED AGENT
+training = True
+
+## TURN THIS TO TRUE IF YOU WANT TO RENDER THE ENVIRONMENT
+episode_render = False
 
 def preprocess_frame(frame):
     # Greyscale frame already done in our vizdoom config
@@ -90,37 +169,6 @@ def stack_frames(stacked_frames, state, is_new_episode):
     return stacked_state, stacked_frames
 
 
-### MODEL HYPERPARAMETERS
-state_size = [84, 84, 4]  # Our input is a stack of 4 frames hence 100x120x4 (Width, height, channels)
-action_size = game.get_available_buttons_size()  # 7 possible actions
-learning_rate = 0.00025  # Alpha (aka learning rate)
-
-### TRAINING HYPERPARAMETERS
-total_episodes = 500  # Total episodes for training
-max_steps = 300  # Max possible steps in an episode
-batch_size = 32
-
-# FIXED Q TARGETS HYPERPARAMETERS
-max_tau = 10000  # Tau is the C step where we update our target network
-
-# EXPLORATION HYPERPARAMETERS for epsilon greedy strategy
-explore_start = 1.0  # exploration probability at start
-explore_stop = 0.01  # minimum exploration probability
-decay_rate = 0.00001#0.00005  # exponential decay rate for exploration prob
-
-# Q LEARNING hyperparameters
-gamma = 0.99  # Discounting rate
-
-### MEMORY HYPERPARAMETERS
-## If you have GPU change to 1million
-pretrain_length = batch_size #100000  # Number of experiences stored in the Memory when initialized for the first time
-memory_size = 100000  # Number of experiences the Memory can keep
-
-### MODIFY THIS TO FALSE IF YOU JUST WANT TO SEE THE TRAINED AGENT
-training = True
-
-## TURN THIS TO TRUE IF YOU WANT TO RENDER THE ENVIRONMENT
-episode_render = False
 
 
 class DDDQNNet:
@@ -136,11 +184,8 @@ class DDDQNNet:
             # We create the placeholders
             # *state_size means that we take each elements of state_size in tuple hence is like if we wrote
             # [None, 100, 120, 4]
-            self.inputs_ = tf.placeholder(tf.float32, [None, *state_size], name="inputs")
-
-            #
+            self.inputs_ = tf.placeholder(tf.float32, [None, *state_size], name="inputs")            #
             self.ISWeights_ = tf.placeholder(tf.float32, [None, 1], name='IS_weights')
-
             self.actions_ = tf.placeholder(tf.float32, [None, action_size], name="actions_")
 
             # Remember that target_Q is the R(s,a) + ymax Qhat(s', a')
@@ -151,7 +196,7 @@ class DDDQNNet:
             CNN
             ELU
             """
-            # Input is 100x120x4
+            # Input is 84x84x4
             self.conv1 = tf.layers.conv2d(inputs=self.inputs_,
                                           filters=32,
                                           kernel_size=[8, 8],
@@ -160,7 +205,7 @@ class DDDQNNet:
                                           kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
                                           name="conv1")
 
-            self.conv1_out = tf.nn.elu(self.conv1, name="conv1_out")
+            self.conv1_out = tf.nn.relu(self.conv1, name="conv1_out")
 
             """
             Second convnet:
@@ -175,7 +220,7 @@ class DDDQNNet:
                                           kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
                                           name="conv2")
 
-            self.conv2_out = tf.nn.elu(self.conv2, name="conv2_out")
+            self.conv2_out = tf.nn.relu(self.conv2, name="conv2_out")
 
             """
             Third convnet:
@@ -183,14 +228,14 @@ class DDDQNNet:
             ELU
             """
             self.conv3 = tf.layers.conv2d(inputs=self.conv2_out,
-                                          filters=128,
-                                          kernel_size=[4, 4],
-                                          strides=[2, 2],
+                                          filters=64,
+                                          kernel_size=[3, 3],
+                                          strides=[1, 1],
                                           padding="VALID",
                                           kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
                                           name="conv3")
 
-            self.conv3_out = tf.nn.elu(self.conv3, name="conv3_out")
+            self.conv3_out = tf.nn.relu(self.conv3, name="conv3_out")
 
             self.flatten = tf.layers.flatten(self.conv3_out)
 
@@ -198,7 +243,7 @@ class DDDQNNet:
             # The one that calculate V(s)
             self.value_fc = tf.layers.dense(inputs=self.flatten,
                                             units=512,
-                                            activation=tf.nn.elu,
+                                            activation=tf.nn.relu,
                                             kernel_initializer=tf.contrib.layers.xavier_initializer(),
                                             name="value_fc")
 
@@ -211,7 +256,7 @@ class DDDQNNet:
             # The one that calculate A(s,a)
             self.advantage_fc = tf.layers.dense(inputs=self.flatten,
                                                 units=512,
-                                                activation=tf.nn.elu,
+                                                activation=tf.nn.relu,
                                                 kernel_initializer=tf.contrib.layers.xavier_initializer(),
                                                 name="advantage_fc")
 
@@ -549,7 +594,7 @@ for i in range(pretrain_length):
         state = next_state
 
 # Setup TensorBoard Writer
-writer = tf.compat.v1.summary.FileWriter("/tensorboard/" + game_mode + "/" + "DDDQN" + "/" + current_date + "/" + current_time)
+#writer = tf.compat.v1.summary.FileWriter("/tensorboard/" + game_mode + "/" + "DDDQN" + "/" + current_date + "/" + current_time)
 
 
 
@@ -614,9 +659,19 @@ write_op = tf.compat.v1.summary.merge_all()
 saver = tf.train.Saver()
 
 if training == True:
-    with tf.Session() as sess:
-        # Initialize the variables
-        sess.run(tf.global_variables_initializer())
+    with tf.compat.v1.Session() as sess:
+        # Initialize the variables # or restore
+        if new == True:
+            sess.run(tf.compat.v1.global_variables_initializer())
+            last_episode = 0
+        if new == False:
+            saver.restore(sess, log_path)
+            # restore last hyper parameters
+            lines = [line.rstrip('\n') for line in open(json_log)]
+            last_line = json.loads(lines[-1])
+            last_episode = last_line['episode']
+            last_explore_start = last_line['explore_probability']
+            explore_start = last_explore_start
 
         # Initialize the decay rate (that will use to reduce epsilon)
         decay_step = 0
@@ -630,8 +685,9 @@ if training == True:
         # Update the parameters of our TargetNetwork with DQN_weights
         update_target = update_target_graph()
         sess.run(update_target)
-
-        for episode in range(total_episodes):
+        next_episode = last_episode + 1
+        for episode in range(next_episode, total_episodes + next_episode):
+        #for episode in range(total_episodes):
             # Set step to 0
             step = 0
 
@@ -780,7 +836,7 @@ if training == True:
 
             # Save model every 5 episodes
             if episode % 5 == 0:
-                save_path = saver.save(sess, "./models/model.ckpt")
+                save_path = saver.save(sess, log_path)  # log path from restored
                 print("Model Saved")
 
 with tf.Session() as sess:
