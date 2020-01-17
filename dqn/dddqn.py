@@ -12,6 +12,7 @@ import json  # for hyperparameters
 import warnings  # ignore all the warning messages that are normally printed during the training because of skiimage
 import shared
 import datetime
+from tensorboard.plugins.hparams import api as hp
 warnings.filterwarnings('ignore')
 
 #game_mode = "basic"  # defend_the_center
@@ -89,19 +90,40 @@ def create_environment():
 
 
 game, possible_actions = create_environment()
+
+
+
+
+
 # PREVIOUS PARAMETERS
 last_episode = 0
 last_explore_start = 0
 ### MODEL HYPERPARAMETERS
 state_size = [84, 84, 4]  # Our input is a stack of 4 frames hence 100x120x4 (Width, height, channels)
 action_size = game.get_available_buttons_size()  # 7 possible actions
-learning_rate = 0.00025  # Alpha (aka learning rate)
+learning_rate = 0.002  # Alpha (aka learning rate)
+
+
+summary_writer = writer
+value = "learning_rate: " + str(learning_rate)
+text_tensor = tf.make_tensor_proto(value, dtype=tf.string)
+meta = tf.SummaryMetadata()
+meta.plugin_data.plugin_name = "text"
+summary = tf.Summary()
+summary.value.add(tag="Hyper Parameters", metadata=meta, tensor=text_tensor)
+summary_writer.add_summary(summary)
 
 ### TRAINING HYPERPARAMETERS
 total_episodes = 500  # Total episodes for training
-max_steps = 300  # Max possible steps in an episode
-batch_size = 32
-
+max_steps = 400  # Max possible steps in an episode
+batch_size = 128
+value = "batch size: " + str(batch_size)
+text_tensor = tf.make_tensor_proto(value, dtype=tf.string)
+meta = tf.SummaryMetadata()
+meta.plugin_data.plugin_name = "text"
+summary = tf.Summary()
+summary.value.add(tag="Hyper Parameters", metadata=meta, tensor=text_tensor)
+summary_writer.add_summary(summary)
 # FIXED Q TARGETS HYPERPARAMETERS
 max_tau = 10000  # Tau is the C step where we update our target network
 

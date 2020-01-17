@@ -8,23 +8,18 @@ from collections import deque  # Ordered collection with ends
 import matplotlib.pyplot as plt  # Display graphs
 import warnings  # This ignore all the warning messages that are normally printed during the training because of skiimage
 warnings.filterwarnings('ignore')
-
+import vizdoom
 def create_environment():
-    game = DoomGame()
-
+    game = vizdoom.DoomGame()
     # Load the correct configuration
-    game.load_config("health_gathering.cfg")
-
+    game_mode = "basic"
+    game.load_config("../scenarios/" + game_mode + ".cfg")
     # Load the correct scenario (in our case defend_the_center scenario)
-    game.set_doom_scenario_path("health_gathering.wad")
-
+    game.set_doom_scenario_path("../scenarios/" + game_mode + ".wad")
     game.init()
-
-    # Here our possible actions
-    # [[1,0,0],[0,1,0],[0,0,1]]
-    possible_actions = np.identity(3, dtype=int).tolist()
-
+    possible_actions  = np.identity(3,dtype=int).tolist()
     return game, possible_actions
+
 
 game, possible_actions = create_environment()
 
@@ -34,10 +29,10 @@ def preprocess_frame(frame):
 
     # Crop the screen (remove the roof because it contains no information)
     # [Up: Down, Left: right]
-    cropped_frame = frame[80:, :]
+    #cropped_frame = frame[80:, :]
 
     # Normalize Pixel Values
-    normalized_frame = cropped_frame / 255.0
+    normalized_frame = frame / 255.0
 
     # Resize
     preprocessed_frame = transform.resize(normalized_frame, [84, 84])
@@ -98,10 +93,10 @@ action_size = game.get_available_buttons_size()  # 3 possible actions: turn left
 stack_size = 4  # Defines how many frames are stacked together
 
 ## TRAINING HYPERPARAMETERS
-learning_rate = 0.002
+learning_rate = 0.001
 num_epochs = 500  # Total epochs for training
 
-batch_size = 1000  # Each 1 is a timestep (NOT AN EPISODE) # YOU CAN CHANGE TO 5000 if you have GPU
+batch_size = 5000  # Each 1 is a timestep (NOT AN EPISODE) # YOU CAN CHANGE TO 5000 if you have GPU
 gamma = 0.95  # Discounting rate
 
 ### MODIFY THIS TO FALSE IF YOU JUST WANT TO SEE THE TRAINED AGENT
@@ -240,7 +235,7 @@ init = tf.global_variables_initializer()
 sess.run(init)
 
 # Setup TensorBoard Writer
-writer = tf.summary.FileWriter("/tensorboard/pg/test")
+writer = tf.summary.FileWriter("/tensorboard/pg/test4")
 
 ## Losses
 tf.summary.scalar("Loss", PGNetwork.loss)
