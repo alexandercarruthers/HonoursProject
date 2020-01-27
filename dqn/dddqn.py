@@ -556,6 +556,7 @@ if training == True:
         if new == True:
             sess.run(tf.compat.v1.global_variables_initializer())
             last_episode = 0
+            tf.summary.FileWriter(writer_path, sess.graph)
         if new == False:
             saver.restore(sess, log_path)
             # restore last hyper parameters

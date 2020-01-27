@@ -42,7 +42,7 @@ def log_episode(path, episode, explore_probability, total_reward, ammo_used, mon
 
 
 def log_episode_tensorboard(writer, episode, explore_probability, total_reward, ammo_used, monsters_killed, accuracy, loss):
-    log_titles = ['loss','explore_probability', 'total_reward', 'ammo_used', 'monsters_killed', 'accuracy']
+    log_titles = ['loss', 'explore_probability', 'total_reward', 'ammo_used', 'monsters_killed', 'accuracy']
     log_values = [loss, explore_probability, total_reward, ammo_used, monsters_killed, accuracy]
     for log, values in zip(log_titles, log_values):
         summary = tf.compat.v1.Summary(value=[tf.compat.v1.Summary.Value(tag=log, simple_value=values)])
@@ -107,9 +107,11 @@ def get_variables():
 
 def log_hyperparameters(writer, hyperpara_dict):
     summary_writer = writer
-    for k, v in hyperpara_dict.items():
-        value = k + v
-        text_tensor = tf.make_tensor_proto(value, dtype=tf.string)
-        meta = tf.SummaryMetadata().plugin_data.plugin_name = "text"
-        summary = tf.Summary().value.add(tag="Hyper Parameters", metadata=meta, tensor=text_tensor)
+    for hyperparameter, value in hyperpara_dict.items():
+        text_to_write = hyperparameter + ": " + value
+        text_tensor = tf.make_tensor_proto(text_to_write, dtype=tf.string)
+        meta = tf.SummaryMetadata()
+        meta.plugin_data.plugin_name = "text"
+        summary = tf.Summary()
+        summary.value.add(tag="Hyper Parameters", metadata=meta, tensor=text_tensor)
         summary_writer.add_summary(summary)
