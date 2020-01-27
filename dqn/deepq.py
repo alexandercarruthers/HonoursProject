@@ -8,7 +8,7 @@ from skimage import transform  # Help us to preprocess the frames
 from collections import deque  # Ordered collection with ends
 import warnings  # This ignore all the warning messages that are normally printed during the training because of skimage
 import json  # for hyperparameters
-import shared
+from dqn import shared
 
 warnings.filterwarnings('ignore')
 
@@ -30,9 +30,6 @@ def create_environment():
 
 
 def preprocess_frame(frame):
-    # Greyscale frame already done in our vizdoom config
-    # x = np.mean(frame,-1)
-    # Crop the screen (remove the roof because it contains no information)
     cropped_frame = frame  # frame[30:-10, 30:-30]
     # Normalize Pixel Values
     normalized_frame = cropped_frame / 255.0
@@ -166,43 +163,9 @@ class Memory:
         return [self.buffer[i] for i in index]
 
 
-# GAME MODE CHOICE
-game_mode = ""  # defend_the_center
-initial_ammo = 0  # basic = 50 def = 26
-network = "DQN"
-new = False
+game_mode, network, initial_ammo, new, log_path, json_path, writer_path = shared.get_variables()
 
-text = input("1 to load previous checkpoint\n"
-             "2 for new model\n"
-             "3 exit\n")
-if text == "1":
-    print("checkpoint name in format ./models/gamemode/network/DD-MM-YY-HH-MM-model.ckpt")
-    game_mode = input("game mode: ")
-    network = input("network: ")
-    date = input("DD-MM-YYYY: ")
-    time = input("HH-MM: ")
-    log_path = "./models/" + game_mode + "/" + network + "/" + date + "-" + time + "-model.ckpt"
-    json_log = "./models/" + game_mode + "/" + network + "/" + date + "-" + time + "log.txt"
-    writer = tf.compat.v1.summary.FileWriter("/tensorboard/" + game_mode + "/" + network + "/" + date + "/" + time)
-    new = False
-if text == "2":
-    game_choice = input("1 basic\n"
-                        "2 defend_the_center\n")
-    if game_choice == "1":
-        game_mode = "basic"
-        initial_ammo = 50
-    if game_choice == "2":
-        game_mode = "defend_the_center"
-        initial_ammo = 26
-    today_date = datetime.datetime.now().strftime("%d-%m-%Y")
-    current_time = datetime.datetime.now().strftime("%H-%M")
-    log_path = "./models/" + game_mode + "/" + network + "/" + today_date + "-" + current_time + "-model.ckpt"
-    json_log = "./models/" + game_mode + "/" + network + "/" + today_date + "-" + current_time + "log.txt"
-    writer = tf.compat.v1.summary.FileWriter(
-        "/tensorboard/" + game_mode + "/" + network + "/" + today_date + "/" + current_time)
-    new = True
-if text == "3":
-    exit()
+writer = tf.compat.v1.summary.FileWriter(writer_path)
 
 game, possible_actions = create_environment()
 # PREVIOUS PARAMETERS
@@ -294,7 +257,7 @@ if training:
         if new == False:
             saver.restore(sess, log_path)
             # restore last hyper parameters
-            lines = [line.rstrip('\n') for line in open(json_log)]
+            lines = [line.rstrip('\n') for line in open(json_path)]
             last_line = json.loads(lines[-1])
             last_episode = last_line['episode']
             last_explore_start = last_line['explore_probability']
@@ -347,10 +310,10 @@ if training:
                     shared.log_episode_std_out(loss, episode, explore_probability, total_reward, ammo_used,
                                                monsters_killed, accuracy)
                     # Log to tensorboard
-                    shared.log_episode_tensorboard(writer, episode, explore_probability, total_reward, ammo_used,
+                    shared.log_episode_tensorboard(writer, loss, episode, explore_probability, total_reward, ammo_used,
                                                    monsters_killed, accuracy)
                     # Log to txt file in json
-                    shared.log_episode(json_log, episode, explore_probability, total_reward, ammo_used, monsters_killed,
+                    shared.log_episode(json_path, episode, explore_probability, total_reward, ammo_used, monsters_killed,
                                        accuracy)
                 else:
                     last_ammo_value = game.get_state().game_variables[0]

@@ -1,0 +1,8 @@
+{"episode": 1, "explore_probability": 0.9993072424934148, "total_reward": 94.0, "ammo_used": 1.0, "monsters_killed": 1.0, "accuracy": 100.0, "date": "27-01-2020", "time": "12-24"}
+{"episode": 2, "explore_probability": 0.9700687947849254, "total_reward": -390.0, "ammo_used": 18.0, "monsters_killed": 0.0, "accuracy": 0.0, "date": "27-01-2020", "time": "12-24"}
+{"episode": 3, "explore_probability": 0.9693969817905563, "total_reward": 94.0, "ammo_used": 1.0, "monsters_killed": 1.0, "accuracy": 100.0, "date": "27-01-2020", "time": "12-24"}
+{"episode": 4, "explore_probability": 0.960135820315452, "total_reward": -21.0, "ammo_used": 6.0, "monsters_killed": 1.0, "accuracy": 16.666666666666664, "date": "27-01-2020", "time": "12-24"}
+{"episode": 5, "explore_probability": 0.9595659098135105, "total_reward": 95.0, "ammo_used": 1.0, "monsters_killed": 1.0, "accuracy": 100.0, "date": "27-01-2020", "time": "12-24"}
+{"episode": 6, "explore_probability": 0.9487084518916761, "total_reward": -44.0, "ammo_used": 7.0, "monsters_killed": 1.0, "accuracy": 14.285714285714285, "date": "27-01-2020", "time": "12-24"}
+{"episode": 7, "explore_probability": 0.9429064642373647, "total_reward": 24.0, "ammo_used": 4.0, "monsters_killed": 1.0, "accuracy": 25.0, "date": "27-01-2020", "time": "12-24"}
+{"episode": 8, "explore_probability": 0.9423468882484062, "total_reward": 95.0, "ammo_used": 1.0, "monsters_killed": 1.0, "accuracy": 100.0, "date": "27-01-2020", "time": "12-24"}

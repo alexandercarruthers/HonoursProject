@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt  # Display graphs
 import warnings  # This ignore all the warning messages that are normally printed during the training because of skiimage
 warnings.filterwarnings('ignore')
 import vizdoom
+
+
 def create_environment():
     game = vizdoom.DoomGame()
     # Load the correct configuration

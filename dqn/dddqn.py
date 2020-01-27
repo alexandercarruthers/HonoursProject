@@ -1,71 +1,19 @@
 import tensorflow as tf  # Deep Learning library
 import numpy as np  # Handle matrices
-
 import vizdoom
 import random  # Handling random number generation
-import time  # Handling time calculation
 from skimage import transform  # Help us to preprocess the frames
-
 from collections import deque  # Ordered collection with ends
-import matplotlib.pyplot as plt  # Display graphs
 import json  # for hyperparameters
 import warnings  # ignore all the warning messages that are normally printed during the training because of skiimage
-import shared
-import datetime
-from tensorboard.plugins.hparams import api as hp
+from dqn import shared
+
 warnings.filterwarnings('ignore')
 
-#game_mode = "basic"  # defend_the_center
-#initial_ammo = 50
-#current_date = datetime.datetime.now().strftime("%d-%m-%Y")
-#current_time = datetime.datetime.now().strftime("%H-%M")
-#json_log = "./models/" + game_mode + "/" + "DDDQN" + "/" + current_date + "-" + current_time + "log.txt"
+game_mode, network, initial_ammo, new, log_path, json_path, writer_path = shared.get_variables()
 
-# GAME MODE CHOICE
-game_mode = ""  # defend_the_center
-initial_ammo = 0  # basic = 50 def = 26
-network = "DDDQN"
-new = False
+writer = tf.compat.v1.summary.FileWriter(writer_path)
 
-text = input("1 to load previous checkpoint\n"
-             "2 for new model\n"
-             "3 exit\n")
-if text == "1":
-    print("checkpoint name in format ./models/gamemode/network/DD-MM-YY-HH-MM-model.ckpt")
-    #game_mode = input("game mode: ")
-    game_choice = input("1 basic\n"
-                        "2 defend_the_center\n")
-    if game_choice == "1":
-        game_mode = "basic"
-        initial_ammo = 50
-    if game_choice == "2":
-        game_mode = "defend_the_center"
-        initial_ammo = 26
-    network = input("network: ")
-    date = input("DD-MM-YYYY: ")
-    time = input("HH-MM: ")
-    log_path = "./models/" + game_mode + "/" + network + "/" + date + "-" + time + "-model.ckpt"
-    json_log = "./models/" + game_mode + "/" + network + "/" + date + "-" + time + "log.txt"
-    writer = tf.compat.v1.summary.FileWriter("/tensorboard/" + game_mode + "/" + network + "/" + date + "/" + time)
-    new = False
-if text == "2":
-    game_choice = input("1 basic\n"
-                        "2 defend_the_center\n")
-    if game_choice == "1":
-        game_mode = "basic"
-        initial_ammo = 50
-    if game_choice == "2":
-        game_mode = "defend_the_center"
-        initial_ammo = 26
-    today_date = datetime.datetime.now().strftime("%d-%m-%Y")
-    current_time = datetime.datetime.now().strftime("%H-%M")
-    log_path = "./models/" + game_mode + "/" + network + "/" + today_date + "-" + current_time + "-model.ckpt"
-    json_log = "./models/" + game_mode + "/" + network + "/" + today_date + "-" + current_time + "log.txt"
-    writer = tf.compat.v1.summary.FileWriter(
-        "/tensorboard/" + game_mode + "/" + network + "/" + today_date + "/" + current_time)
-    new = True
-if text == "3":
-    exit()
 
 def create_environment():
     game = vizdoom.DoomGame()
@@ -84,16 +32,12 @@ def create_environment():
     right = [0, 1, 0]
     shoot = [0, 0, 1]
     possible_actions = [left, right, shoot]
-    #possible_actions = np.identity(7, dtype=int).tolist()
+    # possible_actions = np.identity(7, dtype=int).tolist()
 
     return game, possible_actions
 
 
 game, possible_actions = create_environment()
-
-
-
-
 
 # PREVIOUS PARAMETERS
 last_episode = 0
@@ -102,7 +46,6 @@ last_explore_start = 0
 state_size = [84, 84, 4]  # Our input is a stack of 4 frames hence 100x120x4 (Width, height, channels)
 action_size = game.get_available_buttons_size()  # 7 possible actions
 learning_rate = 0.002  # Alpha (aka learning rate)
-
 
 summary_writer = writer
 value = "learning_rate: " + str(learning_rate)
@@ -116,7 +59,7 @@ summary_writer.add_summary(summary)
 ### TRAINING HYPERPARAMETERS
 total_episodes = 500  # Total episodes for training
 max_steps = 400  # Max possible steps in an episode
-batch_size = 128
+batch_size = 32
 value = "batch size: " + str(batch_size)
 text_tensor = tf.make_tensor_proto(value, dtype=tf.string)
 meta = tf.SummaryMetadata()
@@ -130,14 +73,14 @@ max_tau = 10000  # Tau is the C step where we update our target network
 # EXPLORATION HYPERPARAMETERS for epsilon greedy strategy
 explore_start = 1.0  # exploration probability at start
 explore_stop = 0.01  # minimum exploration probability
-decay_rate = 0.0001#0.00005  # exponential decay rate for exploration prob
+decay_rate = 0.0001  # 0.00005  # exponential decay rate for exploration prob
 
 # Q LEARNING hyperparameters
 gamma = 0.99  # Discounting rate
 
 ### MEMORY HYPERPARAMETERS
 ## If you have GPU change to 1million
-pretrain_length = batch_size #100000  # Number of experiences stored in the Memory when initialized for the first time
+pretrain_length = batch_size  # 100000  # Number of experiences stored in the Memory when initialized for the first time
 memory_size = 1000000  # Number of experiences the Memory can keep
 
 ### MODIFY THIS TO FALSE IF YOU JUST WANT TO SEE THE TRAINED AGENT
@@ -146,11 +89,12 @@ training = True
 ## TURN THIS TO TRUE IF YOU WANT TO RENDER THE ENVIRONMENT
 episode_render = False
 
+
 def preprocess_frame(frame):
     # Greyscale frame already done in our vizdoom config
     # x = np.mean(frame,-1)
     # Crop the screen (remove the roof because it contains no information)
-    cropped_frame = frame#frame[30:-10, 30:-30]
+    cropped_frame = frame  # frame[30:-10, 30:-30]
     # Normalize Pixel Values
     normalized_frame = cropped_frame / 255.0
     # Resize
@@ -191,8 +135,6 @@ def stack_frames(stacked_frames, state, is_new_episode):
     return stacked_state, stacked_frames
 
 
-
-
 class DDDQNNet:
     def __init__(self, state_size, action_size, learning_rate, name):
         self.state_size = state_size
@@ -206,7 +148,7 @@ class DDDQNNet:
             # We create the placeholders
             # *state_size means that we take each elements of state_size in tuple hence is like if we wrote
             # [None, 100, 120, 4]
-            self.inputs_ = tf.placeholder(tf.float32, [None, *state_size], name="inputs")            #
+            self.inputs_ = tf.placeholder(tf.float32, [None, *state_size], name="inputs")  #
             self.ISWeights_ = tf.placeholder(tf.float32, [None, 1], name='IS_weights')
             self.actions_ = tf.placeholder(tf.float32, [None, action_size], name="actions_")
 
@@ -299,12 +241,9 @@ class DDDQNNet:
             # The loss is modified because of PER
             self.absolute_errors = tf.abs(self.target_Q - self.Q)  # for updating Sumtree
 
-            #self.loss = tf.reduce_mean(self.ISWeights_ * tf.squared_difference(self.target_Q, self.Q))
+            # self.loss = tf.reduce_mean(self.ISWeights_ * tf.squared_difference(self.target_Q, self.Q))
             self.loss = tf.reduce_mean(tf.square(self.target_Q - self.Q))
             self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate).minimize(self.loss)
-
-
-# In[ ]:
 
 
 # Reset the graph
@@ -453,11 +392,6 @@ tree_index  0 0  0  We fill the leaves from left to right
         return self.tree[0]  # Returns the root node
 
 
-# Here we don't use deque anymore
-
-# In[ ]:
-
-
 class Memory(object):  # stored as ( s, a, r, s_ ) in SumTree
     """
     This SumTree code is modified version and the original code is from:
@@ -560,71 +494,29 @@ class Memory(object):  # stored as ( s, a, r, s_ ) in SumTree
             self.tree.update(ti, p)
 
 
-# Here we'll **deal with the empty memory problem**: we pre-populate our memory by taking random actions and storing the experience.
-# Instantiate memory
 memory = Memory(memory_size)
-
-# Render the environment
 game.new_episode()
 
 for i in range(pretrain_length):
-    # If it's the first step
     if i == 0:
-        # First we need a state
         state = game.get_state().screen_buffer
         state, stacked_frames = stack_frames(stacked_frames, state, True)
-
-    # Random action
     action = random.choice(possible_actions)
-
-    # Get the rewards
     reward = game.make_action(action)
-
-    # Look if the episode is finished
     done = game.is_episode_finished()
-
-    # If we're dead
     if done:
-        # We finished the episode
         next_state = np.zeros(state.shape)
-
-        # Add experience to memory
-        # experience = np.hstack((state, [action, reward], next_state, done))
-
         experience = state, action, reward, next_state, done
         memory.store(experience)
-
-        # Start a new episode
         game.new_episode()
-
-        # First we need a state
         state = game.get_state().screen_buffer
-
-        # Stack the frames
         state, stacked_frames = stack_frames(stacked_frames, state, True)
-
     else:
-        # Get the next state
         next_state = game.get_state().screen_buffer
         next_state, stacked_frames = stack_frames(stacked_frames, next_state, False)
-
-        # Add experience to memory
         experience = state, action, reward, next_state, done
         memory.store(experience)
-
-        # Our state is now the next_state
         state = next_state
-
-# Setup TensorBoard Writer
-#writer = tf.compat.v1.summary.FileWriter("/tensorboard/" + game_mode + "/" + "DDDQN" + "/" + current_date + "/" + current_time)
-
-
-
-"""
-This function will do the part
-With ϵ select a random action atat, otherwise select at=argmaxaQ(st,a)
-"""
-
 
 def predict_action(explore_start, explore_stop, decay_rate, decay_step, state, actions):
     ## EPSILON GREEDY STRATEGY
@@ -651,30 +543,19 @@ def predict_action(explore_start, explore_stop, decay_rate, decay_step, state, a
     return action, explore_probability
 
 
-# In[ ]:
-
-
-# This function helps us to copy one set of variables to another
-# In our case we use it when we want to copy the parameters of DQN to Target_network
-# Thanks of the very good implementation of Arthur Juliani https://github.com/awjuliani
 def update_target_graph():
     # Get the parameters of our DQNNetwork
     from_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "DQNetwork")
-
     # Get the parameters of our Target_network
     to_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "TargetNetwork")
-
     op_holder = []
-
     # Update our target_network parameters with DQNNetwork parameters
     for from_var, to_var in zip(from_vars, to_vars):
         op_holder.append(to_var.assign(from_var))
     return op_holder
 
-
-## Losses
+# Losses
 tf.compat.v1.summary.scalar("Loss", DQNetwork.loss)
-
 
 write_op = tf.compat.v1.summary.merge_all()
 # Saver will help us to save our model
@@ -689,7 +570,7 @@ if training == True:
         if new == False:
             saver.restore(sess, log_path)
             # restore last hyper parameters
-            lines = [line.rstrip('\n') for line in open(json_log)]
+            lines = [line.rstrip('\n') for line in open(json_path)]
             last_line = json.loads(lines[-1])
             last_episode = last_line['episode']
             last_explore_start = last_line['explore_probability']
@@ -709,7 +590,7 @@ if training == True:
         sess.run(update_target)
         next_episode = last_episode + 1
         for episode in range(next_episode, total_episodes + next_episode):
-        #for episode in range(total_episodes):
+            # for episode in range(total_episodes):
             # Set step to 0
             step = 0
 
@@ -747,7 +628,6 @@ if training == True:
                 # Add the reward to total reward
                 episode_rewards.append(reward)
 
-
                 # If the game is finished
                 if done:
                     # the episode ends so no next state
@@ -773,7 +653,8 @@ if training == True:
                     shared.log_episode_tensorboard(writer, episode, explore_probability, total_reward, ammo_used,
                                                    monsters_killed, accuracy)
                     # Log to txt file in json
-                    shared.log_episode(json_log, episode, explore_probability, total_reward, ammo_used, monsters_killed,
+                    shared.log_episode(json_path, episode, explore_probability, total_reward, ammo_used,
+                                       monsters_killed,
                                        accuracy)
 
                 else:
@@ -905,10 +786,8 @@ with tf.Session() as sess:
 
             game.make_action(action)
             done = game.is_episode_finished()
-
             if done:
                 break
-
             else:
                 next_state = game.get_state().screen_buffer
                 next_state, stacked_frames = stack_frames(stacked_frames, next_state, False)
@@ -918,4 +797,3 @@ with tf.Session() as sess:
         print("Score: ", score)
 
     game.close()
-

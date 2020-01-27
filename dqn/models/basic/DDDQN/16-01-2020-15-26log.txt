@@ -1,0 +1,2 @@
+{"episode": 1, "explore_probability": 0.9989115987304453, "total_reward": 90.0, "ammo_used": 1.0, "monsters_killed": 1.0, "accuracy": 100.0, "date": "16-01-2020", "time": "15-26"}
+{"episode": 2, "explore_probability": 0.9696848440622753, "total_reward": -385.0, "ammo_used": 17.0, "monsters_killed": 0.0, "accuracy": 0.0, "date": "16-01-2020", "time": "15-26"}

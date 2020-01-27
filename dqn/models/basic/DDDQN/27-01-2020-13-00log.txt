@@ -1,0 +1,1 @@
+{"episode": 1, "explore_probability": 0.9994061781643654, "total_reward": 95.0, "ammo_used": 1.0, "monsters_killed": 1.0, "accuracy": 100.0, "date": "27-01-2020", "time": "13-00"}
