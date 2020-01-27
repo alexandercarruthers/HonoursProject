@@ -39,49 +39,36 @@ def create_environment():
 
 game, possible_actions = create_environment()
 
-# PREVIOUS PARAMETERS
-last_episode = 0
-last_explore_start = 0
-### MODEL HYPERPARAMETERS
 state_size = [84, 84, 4]  # Our input is a stack of 4 frames hence 100x120x4 (Width, height, channels)
 action_size = game.get_available_buttons_size()  # 7 possible actions
+last_episode = 0
+last_explore_start = 0
+# hyper params
 learning_rate = 0.002  # Alpha (aka learning rate)
-
-summary_writer = writer
-value = "learning_rate: " + str(learning_rate)
-text_tensor = tf.make_tensor_proto(value, dtype=tf.string)
-meta = tf.SummaryMetadata()
-meta.plugin_data.plugin_name = "text"
-summary = tf.Summary()
-summary.value.add(tag="Hyper Parameters", metadata=meta, tensor=text_tensor)
-summary_writer.add_summary(summary)
-
-### TRAINING HYPERPARAMETERS
 total_episodes = 500  # Total episodes for training
 max_steps = 400  # Max possible steps in an episode
 batch_size = 32
-value = "batch size: " + str(batch_size)
-text_tensor = tf.make_tensor_proto(value, dtype=tf.string)
-meta = tf.SummaryMetadata()
-meta.plugin_data.plugin_name = "text"
-summary = tf.Summary()
-summary.value.add(tag="Hyper Parameters", metadata=meta, tensor=text_tensor)
-summary_writer.add_summary(summary)
-# FIXED Q TARGETS HYPERPARAMETERS
-max_tau = 10000  # Tau is the C step where we update our target network
-
-# EXPLORATION HYPERPARAMETERS for epsilon greedy strategy
-explore_start = 1.0  # exploration probability at start
+max_tau = 10000  # Tau is the C step where we update our target network FIXED Q TARGETS HYPERPARAMETERS
+explore_start = 1.0  # exploration probability at start EXPLORATION HYPERPARAMETERS for epsilon greedy strategy
 explore_stop = 0.01  # minimum exploration probability
 decay_rate = 0.0001  # 0.00005  # exponential decay rate for exploration prob
+gamma = 0.99  # Discounting rate # Q LEARNING hyperparameters
+memory_size = 1000000  # Number of experiences the Memory can keep ## If you have GPU change to 1million### MEMORY HYPERPARAMETERS
 
-# Q LEARNING hyperparameters
-gamma = 0.99  # Discounting rate
+hyperparameter_dict = {"learning_rate": str(learning_rate),
+                       "total_episodes": str(total_episodes),
+                       "max_steps": str(max_steps),
+                       "batch_size": str(batch_size),
+                       "max_tau": str(max_tau),
+                       "explore_start": str(explore_start),
+                       "explore_stop": str(explore_stop),
+                       "decay_rate": str(decay_rate),
+                       "gamma": str(gamma),
+                       "memory_size": str(memory_size)
+                       }
+shared.log_hyperparameters(writer=writer, hyperpara_dict=hyperparameter_dict)
 
-### MEMORY HYPERPARAMETERS
-## If you have GPU change to 1million
 pretrain_length = batch_size  # 100000  # Number of experiences stored in the Memory when initialized for the first time
-memory_size = 1000000  # Number of experiences the Memory can keep
 
 ### MODIFY THIS TO FALSE IF YOU JUST WANT TO SEE THE TRAINED AGENT
 training = True
@@ -518,6 +505,7 @@ for i in range(pretrain_length):
         memory.store(experience)
         state = next_state
 
+
 def predict_action(explore_start, explore_stop, decay_rate, decay_step, state, actions):
     ## EPSILON GREEDY STRATEGY
     # Choose action a from state s using epsilon greedy.
@@ -553,6 +541,7 @@ def update_target_graph():
     for from_var, to_var in zip(from_vars, to_vars):
         op_holder.append(to_var.assign(from_var))
     return op_holder
+
 
 # Losses
 tf.compat.v1.summary.scalar("Loss", DQNetwork.loss)
@@ -650,12 +639,17 @@ if training == True:
                     shared.log_episode_std_out(loss, episode, explore_probability, total_reward, ammo_used,
                                                monsters_killed, accuracy)
                     # Log to tensorboard
-                    shared.log_episode_tensorboard(writer, episode, explore_probability, total_reward, ammo_used,
-                                                   monsters_killed, accuracy)
+                    shared.log_episode_tensorboard(writer=writer,
+                                                   episode=episode,
+                                                   explore_probability=explore_probability,
+                                                   total_reward=total_reward,
+                                                   ammo_used=ammo_used,
+                                                   monsters_killed=monsters_killed,
+                                                   accuracy=accuracy,
+                                                   loss=loss)
                     # Log to txt file in json
                     shared.log_episode(json_path, episode, explore_probability, total_reward, ammo_used,
-                                       monsters_killed,
-                                       accuracy)
+                                       monsters_killed, accuracy)
 
                 else:
                     last_ammo_value = game.get_state().game_variables[0]

@@ -6,9 +6,10 @@ import time  # Handling time calculation
 from skimage import transform  # Help us to preprocess the frames
 from collections import deque  # Ordered collection with ends
 import matplotlib.pyplot as plt  # Display graphs
-import warnings  # This ignore all the warning messages that are normally printed during the training because of skiimage
-warnings.filterwarnings('ignore')
+import warnings  # This ignore all the warning messages from  skiimage
 import vizdoom
+from dqn import shared
+warnings.filterwarnings('ignore')
 
 
 def create_environment():
@@ -19,32 +20,29 @@ def create_environment():
     # Load the correct scenario (in our case defend_the_center scenario)
     game.set_doom_scenario_path("../scenarios/" + game_mode + ".wad")
     game.init()
-    possible_actions  = np.identity(3,dtype=int).tolist()
+    possible_actions = np.identity(3, dtype=int).tolist()
     return game, possible_actions
 
 
+game_mode, network, initial_ammo, new, log_path, json_path, writer_path = shared.get_variables()
+
 game, possible_actions = create_environment()
 
+
 def preprocess_frame(frame):
-    # Greyscale frame already done in our vizdoom config
-    # x = np.mean(frame,-1)
-
-    # Crop the screen (remove the roof because it contains no information)
-    # [Up: Down, Left: right]
-    #cropped_frame = frame[80:, :]
-
+    cropped_frame = frame  # frame[30:-10, 30:-30]
     # Normalize Pixel Values
-    normalized_frame = frame / 255.0
-
+    normalized_frame = cropped_frame / 255.0
     # Resize
     preprocessed_frame = transform.resize(normalized_frame, [84, 84])
-
     return preprocessed_frame
+
 
 stack_size = 4  # We stack 4 frames
 
 # Initialize deque with zero-images one array for each image
 stacked_frames = deque([np.zeros((84, 84), dtype=np.int) for i in range(stack_size)], maxlen=4)
+
 
 def stack_frames(stacked_frames, state, is_new_episode):
     # Preprocess frame
@@ -59,10 +57,8 @@ def stack_frames(stacked_frames, state, is_new_episode):
         stacked_frames.append(frame)
         stacked_frames.append(frame)
         stacked_frames.append(frame)
-
         # Stack the frames
         stacked_state = np.stack(stacked_frames, axis=2)
-
     else:
         # Append frame to deque, automatically removes the oldest frame
         stacked_frames.append(frame)
@@ -71,6 +67,7 @@ def stack_frames(stacked_frames, state, is_new_episode):
         stacked_state = np.stack(stacked_frames, axis=2)
 
     return stacked_state, stacked_frames
+
 
 # ### discount_and_normalize_rewards 💰
 # This function is important, because we are in a Monte Carlo situation. <br>
@@ -89,20 +86,22 @@ def discount_and_normalize_rewards(episode_rewards):
 
     return discounted_episode_rewards
 
+
 ### ENVIRONMENT HYPERPARAMETERS
 state_size = [84, 84, 4]  # Our input is a stack of 4 frames hence 84x84x4 (Width, height, channels)
 action_size = game.get_available_buttons_size()  # 3 possible actions: turn left, turn right, move forward
 stack_size = 4  # Defines how many frames are stacked together
 
 ## TRAINING HYPERPARAMETERS
-learning_rate = 0.001
-num_epochs = 500  # Total epochs for training
+learning_rate = 0.002
+total_episodes = 500  # Total epochs for training
 
-batch_size = 5000  # Each 1 is a timestep (NOT AN EPISODE) # YOU CAN CHANGE TO 5000 if you have GPU
-gamma = 0.95  # Discounting rate
+batch_size = 128  # Each 1 is a timestep (NOT AN EPISODE) # YOU CAN CHANGE TO 5000 if you have GPU
+gamma = 0.99  # Discounting rate
 
 ### MODIFY THIS TO FALSE IF YOU JUST WANT TO SEE THE TRAINED AGENT
 training = True
+
 
 # Quick note: Policy gradient methods like reinforce **are on-policy method which can not be updated from experience replay.**
 
@@ -225,6 +224,7 @@ class PGNetwork:
             with tf.name_scope("train"):
                 self.train_opt = tf.train.RMSPropOptimizer(self.learning_rate).minimize(self.loss)
 
+
 # Reset the graph
 tf.reset_default_graph()
 
@@ -237,7 +237,7 @@ init = tf.global_variables_initializer()
 sess.run(init)
 
 # Setup TensorBoard Writer
-writer = tf.summary.FileWriter("/tensorboard/pg/test4")
+writer = tf.summary.FileWriter("/tensorboard/pg/test12")
 
 ## Losses
 tf.summary.scalar("Loss", PGNetwork.loss)
@@ -246,6 +246,7 @@ tf.summary.scalar("Loss", PGNetwork.loss)
 tf.summary.scalar("Reward_mean", PGNetwork.mean_reward_)
 
 write_op = tf.summary.merge_all()
+
 
 def make_batch(batch_size, stacked_frames):
     # Initialize lists: states, actions, rewards_of_episode, rewards_of_batch, discounted_rewards
@@ -315,6 +316,8 @@ def make_batch(batch_size, stacked_frames):
 
     return np.stack(np.array(states)), np.stack(np.array(actions)), np.concatenate(rewards_of_batch), np.concatenate(
         discounted_rewards), episode_num
+
+
 # Keep track of all rewards total for each batch
 allRewards = []
 
@@ -330,9 +333,10 @@ saver = tf.train.Saver()
 if training:
     # Load the model
     # saver.restore(sess, "./models/model.ckpt")
-    while epoch < num_epochs + 1:
+    while epoch < total_episodes + 1:
         # Gather training data
-        states_mb, actions_mb, rewards_of_batch, discounted_rewards_mb, nb_episodes_mb = make_batch(batch_size, stacked_frames)
+        states_mb, actions_mb, rewards_of_batch, discounted_rewards_mb, nb_episodes_mb = make_batch(batch_size,
+                                                                                                    stacked_frames)
         ### These part is used for analytics
         # Calculate the total reward ot the batch
         total_reward_of_that_batch = np.sum(rewards_of_batch)
@@ -347,7 +351,7 @@ if training:
         # Calculate maximum reward recorded
         maximumRewardRecorded = np.amax(allRewards)
         print("==========================================")
-        print("Epoch: ", epoch, "/", num_epochs)
+        print("Epoch: ", epoch, "/", total_episodes)
         print("-----------")
         print("Number of training episodes: {}".format(nb_episodes_mb))
         print("Total reward: {}".format(total_reward_of_that_batch, nb_episodes_mb))
@@ -355,13 +359,13 @@ if training:
         print("Average Reward of all training: {}".format(average_reward_of_all_training))
         print("Max reward for a batch so far: {}".format(maximumRewardRecorded))
         # Feedforward, gradient and backpropagation
-        loss_, _ = sess.run([PGNetwork.loss, PGNetwork.train_opt],
+        loss, _ = sess.run([PGNetwork.loss, PGNetwork.train_opt],
                             feed_dict={PGNetwork.inputs_: states_mb.reshape((len(states_mb), 84, 84, 4)),
                                        PGNetwork.actions: actions_mb,
                                        PGNetwork.discounted_episode_rewards_: discounted_rewards_mb
                                        })
 
-        print("Training Loss: {}".format(loss_))
+        print("Training Loss: {}".format(loss))
 
         # Write TF Summaries
         summary = sess.run(write_op, feed_dict={PGNetwork.inputs_: states_mb.reshape((len(states_mb), 84, 84, 4)),
@@ -373,7 +377,9 @@ if training:
         # summary = sess.run(write_op, feed_dict={x: s_.reshape(len(s_),84,84,1), y:a_, d_r: d_r_, r: r_, n: n_})
         writer.add_summary(summary, epoch)
         writer.flush()
-
+        # log to std out
+        shared.log_episode_std_out(loss, epoch, explore_probability=0, total_reward=0, ammo_used=0,
+                                   monsters_killed=0, accuracy=0)
         # Save Model
         if epoch % 10 == 0:
             saver.save(sess, "./models/model.ckpt")
@@ -384,7 +390,7 @@ if training:
 saver = tf.train.Saver()
 
 with tf.Session() as sess:
-    game = DoomGame()
+    game = vizdoom.DoomGame()
 
     # Load the correct configuration
     game.load_config("health_gathering.cfg")
