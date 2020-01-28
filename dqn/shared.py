@@ -118,6 +118,7 @@ def get_variables():
     writer_path = "/tensorboard/" + game_mode + "/" + network + "/" + date + "/" + time
     return game_mode, network, initial_ammo, new, log_path, json_path, writer_path
 
+
 def log_hyperparameters(writer, hyperpara_dict):
     summary_writer = writer
     for hyperparameter, value in hyperpara_dict.items():
@@ -128,3 +129,4 @@ def log_hyperparameters(writer, hyperpara_dict):
         summary = tf.compat.v1.Summary()
         summary.value.add(tag="Hyper Parameters", metadata=meta, tensor=text_tensor)
         summary_writer.add_summary(summary)
+

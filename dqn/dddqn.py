@@ -343,11 +343,11 @@ saver = tf.compat.v1.train.Saver()
 if training is True:
     with tf.compat.v1.Session() as sess:
         # Initialize the variables # or restore
-        if new == True:
+        if new is True:
             sess.run(tf.compat.v1.global_variables_initializer())
             last_episode = 0
             tf.compat.v1.summary.FileWriter(writer_path, sess.graph)
-        if new == False:
+        if new is False:
             saver.restore(sess, log_path)
             # restore last hyper parameters
             lines = [line.rstrip('\n') for line in open(json_path)]
@@ -355,71 +355,39 @@ if training is True:
             last_episode = last_line['episode']
             last_explore_start = float(last_line['explore_probability'])
             explore_start = last_explore_start
-
         # Initialize the decay rate (that will use to reduce epsilon)
         decay_step = 0
-
-        # Set tau = 0
         tau = 0
-
-        # Init the game
         game.init()
-
         # Update the parameters of our TargetNetwork with DQN_weights
         update_target = update_target_graph()
         sess.run(update_target)
         next_episode = last_episode + 1
         for episode in range(next_episode, total_episodes + next_episode):
-            # for episode in range(total_episodes):
-            # Set step to 0
             step = 0
-
-            # Initialize the rewards of the episode
-            episode_rewards = []
-
-            # Make a new episode and observe the first state
-            game.new_episode()
-
+            episode_rewards = []  # Initialize the rewards of the episode
+            game.new_episode()  # Make a new episode and observe the first state
             state = game.get_state().screen_buffer
-
-            # Remember that stack frame function also call our preprocess function.
             state, stacked_frames = stack_frames(stacked_frames, state, True)
             last_ammo_value = 0
             monsters_killed = 0
             while step < max_steps:
                 step += 1
-
-                # Increase the C step
                 tau += 1
-
-                # Increase decay_step
                 decay_step += 1
-
                 # With ϵ select a random action atat, otherwise select a = argmaxQ(st,a)
                 action, explore_probability = predict_action(explore_start, explore_stop, decay_rate, decay_step, state,
                                                              possible_actions)
-
-                # Do the action
-                reward = game.make_action(action)
-
-                # Look if the episode is finished
-                done = game.is_episode_finished()
-
-                # Add the reward to total reward
-                episode_rewards.append(reward)
-
-                # If the game is finished
+                reward = game.make_action(action)  # Do the action
+                done = game.is_episode_finished()  # Look if the episode is finished
+                episode_rewards.append(reward)  # Add the reward to total reward
                 if done:
                     # the episode ends so no next state
                     next_state = np.zeros((84, 84), dtype=np.int)
                     next_state, stacked_frames = stack_frames(stacked_frames, next_state, False)
-
-                    # Set step = max_steps to end the episode
-                    step = max_steps
-
+                    step = max_steps  # Set step = max_steps to end the episode
                     # Get the total reward of the episode
                     total_reward = np.sum(episode_rewards)
-
                     # Add experience to memory
                     experience = state, action, reward, next_state, done
                     memory.store(experience)
@@ -427,8 +395,13 @@ if training is True:
                     ammo_used = initial_ammo - last_ammo_value
                     accuracy = shared.calculate_accuracy(monsters_killed, ammo_used)
                     # log to std out
-                    shared.log_episode_std_out(loss, episode, explore_probability, total_reward, ammo_used,
-                                               monsters_killed, accuracy)
+                    shared.log_episode_std_out(loss,
+                                               episode,
+                                               explore_probability,
+                                               total_reward,
+                                               ammo_used,
+                                               monsters_killed,
+                                               accuracy)
                     # Log to tensorboard
                     shared.log_episode_tensorboard(writer=writer,
                                                    episode=episode,
@@ -453,57 +426,42 @@ if training is True:
                     monsters_killed = game.get_state().game_variables[2]
                     # Get the next state
                     next_state = game.get_state().screen_buffer
-
                     # Stack the frame of the next_state
                     next_state, stacked_frames = stack_frames(stacked_frames, next_state, False)
-
                     # Add experience to memory
                     experience = state, action, reward, next_state, done
                     memory.store(experience)
-
                     # st+1 is now our current state
                     state = next_state
-
                 ### LEARNING PART
                 # Obtain random mini-batch from memory
                 tree_idx, batch, ISWeights_mb = memory.sample(batch_size)
-
                 states_mb = np.array([each[0][0] for each in batch], ndmin=3)
                 actions_mb = np.array([each[0][1] for each in batch])
                 rewards_mb = np.array([each[0][2] for each in batch])
                 next_states_mb = np.array([each[0][3] for each in batch], ndmin=3)
                 dones_mb = np.array([each[0][4] for each in batch])
-
                 target_Qs_batch = []
-
                 ### DOUBLE DQN Logic
                 # Use DQNNetwork to select the action to take at next_state (a') (action with the highest Q-value)
                 # Use TargetNetwork to calculate the Q_val of Q(s',a')
-
                 # Get Q values for next_state
                 q_next_state = sess.run(DQNetwork.output, feed_dict={DQNetwork.inputs_: next_states_mb})
-
                 # Calculate Qtarget for all actions that state
                 q_target_next_state = sess.run(TargetNetwork.output, feed_dict={TargetNetwork.inputs_: next_states_mb})
-
                 # Set Q_target = r if the episode ends at s+1, otherwise set Q_target = r + gamma * Qtarget(s',a')
                 for i in range(0, len(batch)):
                     terminal = dones_mb[i]
-
                     # We got a'
                     action = np.argmax(q_next_state[i])
-
                     # If we are in a terminal state, only equals reward
                     if terminal:
                         target_Qs_batch.append(rewards_mb[i])
-
                     else:
                         # Take the Qtarget for action a'
                         target = rewards_mb[i] + gamma * q_target_next_state[i][action]
                         target_Qs_batch.append(target)
-
                 targets_mb = np.array([each for each in target_Qs_batch])
-
                 _, loss, absolute_errors = sess.run([DQNetwork.optimizer, DQNetwork.loss, DQNetwork.absolute_errors],
                                                     feed_dict={DQNetwork.inputs_: states_mb,
                                                                DQNetwork.target_Q: targets_mb,
@@ -512,7 +470,6 @@ if training is True:
 
                 # Update priority
                 memory.batch_update(tree_idx, absolute_errors)
-
                 # Write TF Summaries
                 summary = sess.run(write_op, feed_dict={DQNetwork.inputs_: states_mb,
                                                         DQNetwork.target_Q: targets_mb,
@@ -520,14 +477,12 @@ if training is True:
                                                         DQNetwork.ISWeights_: ISWeights_mb})
                 writer.add_summary(summary, episode)
                 writer.flush()
-
                 if tau > max_tau:
                     # Update the parameters of our TargetNetwork with DQN_weights
                     update_target = update_target_graph()
                     sess.run(update_target)
                     tau = 0
                     print("Model updated")
-
             # Save model every 5 episodes
             if episode % 5 == 0:
                 save_path = saver.save(sess, log_path)  # log path from restored
@@ -535,21 +490,15 @@ if training is True:
 
 with tf.Session() as sess:
     game = vizdoom.DoomGame()
-
     # Load the correct configuration (TESTING)
     game.load_config("../scenarios/" + game_mode + ".cfg")
-
     # Load the correct scenario (in our case deadly_corridor scenario)
     game.set_doom_scenario_path("../scenarios/" + game_mode + ".wad")
-
     game.init()
-
     # Load the model
     saver.restore(sess, "./models/model.ckpt")
     game.init()
-
     for i in range(10):
-
         game.new_episode()
         state = game.get_state().screen_buffer
         state, stacked_frames = stack_frames(stacked_frames, state, True)
@@ -559,22 +508,17 @@ with tf.Session() as sess:
             # Choose action a from state s using epsilon greedy.
             ## First we randomize a number
             exp_exp_tradeoff = np.random.rand()
-
             explore_probability = 0.01
-
             if (explore_probability > exp_exp_tradeoff):
                 # Make a random action (exploration)
                 action = random.choice(possible_actions)
-
             else:
                 # Get action from Q-network (exploitation)
                 # Estimate the Qs values state
                 Qs = sess.run(DQNetwork.output, feed_dict={DQNetwork.inputs_: state.reshape((1, *state.shape))})
-
                 # Take the biggest Q value (= the best action)
                 choice = np.argmax(Qs)
                 action = possible_actions[int(choice)]
-
             game.make_action(action)
             done = game.is_episode_finished()
             if done:
@@ -583,8 +527,6 @@ with tf.Session() as sess:
                 next_state = game.get_state().screen_buffer
                 next_state, stacked_frames = stack_frames(stacked_frames, next_state, False)
                 state = next_state
-
         score = game.get_total_reward()
         print("Score: ", score)
-
     game.close()
