@@ -19,46 +19,59 @@ import tensorflow as tf
 
 def calculate_accuracy(frags, ammo_used):
     accuracy = (frags / ammo_used) * 100
+    accuracy = int(accuracy)
     return accuracy
 
 
-def log_episode(path, episode, explore_probability, total_reward, ammo_used, monsters_killed, accuracy):
-    output_data = {'episode': episode,
-                   'explore_probability': explore_probability,
-                   'total_reward': total_reward,
-                   'ammo_used': ammo_used,
-                   'monsters_killed': monsters_killed,
-                   'accuracy': accuracy}
-    # Get current date / time
+def log_episode_json(path,
+                     episode,
+                     explore_probability,
+                     total_reward,
+                     ammo_used,
+                     monsters_killed,
+                     accuracy,
+                     loss):
     current_date = datetime.datetime.now().strftime("%d-%m-%Y")
     current_time = datetime.datetime.now().strftime("%H-%M")
-    output_data['date'] = current_date
-    output_data['time'] = current_time
-    # dictionary to json
-    output_data_as_json = json.dumps(output_data)
+    output_data = {'episode': episode,
+                   'total_reward': str(int(total_reward)),
+                   'loss': str(round(loss,4)),
+                   'explore_probability': str(round(explore_probability,4)),
+                   'ammo_used': str(int(ammo_used)),
+                   'monsters_killed': str(int(monsters_killed)),
+                   'accuracy': str(accuracy),
+                   'date': current_date,
+                   'time': current_time}
+    output_data_as_json = json.dumps(output_data)  # dictionary to json
     with open(path, 'a') as outfile:
         outfile.write(output_data_as_json)
         outfile.write("\n")
 
 
-def log_episode_tensorboard(writer, episode, explore_probability, total_reward, ammo_used, monsters_killed, accuracy, loss):
+def log_episode_tensorboard(writer,
+                            episode,
+                            explore_probability,
+                            total_reward,
+                            ammo_used,
+                            monsters_killed,
+                            accuracy,
+                            loss):
     log_titles = ['loss', 'explore_probability', 'total_reward', 'ammo_used', 'monsters_killed', 'accuracy']
     log_values = [loss, explore_probability, total_reward, ammo_used, monsters_killed, accuracy]
     for log, values in zip(log_titles, log_values):
         summary = tf.compat.v1.Summary(value=[tf.compat.v1.Summary.Value(tag=log, simple_value=values)])
         writer.add_summary(summary, episode)
-    # write_op = tf.compat.v1.summary.merge_all()
     writer.flush()
 
 
 def log_episode_std_out(loss, episode, explore_probability, total_reward, ammo_used, monsters_killed, accuracy):
     print('Episode: {}'.format(episode),
-          'Total reward: {}'.format(total_reward),
+          'Total reward: {:.0f}'.format(total_reward),
           'Training loss: {:.4f}'.format(loss),
           'Explore P: {:.4f}'.format(explore_probability),
-          'Ammo used: {}'.format(ammo_used),
-          'monsters killed: {}'.format(monsters_killed),
-          'Accuracy: {}'.format(accuracy))
+          'Ammo used: {:.0f}'.format(ammo_used),
+          'monsters killed: {:.0f}'.format(monsters_killed),
+          'Accuracy: {:.0f}'.format(accuracy))
 
 
 def get_variables():
@@ -109,9 +122,9 @@ def log_hyperparameters(writer, hyperpara_dict):
     summary_writer = writer
     for hyperparameter, value in hyperpara_dict.items():
         text_to_write = hyperparameter + ": " + value
-        text_tensor = tf.make_tensor_proto(text_to_write, dtype=tf.string)
-        meta = tf.SummaryMetadata()
+        text_tensor = tf.compat.v1.make_tensor_proto(text_to_write, dtype=tf.string)
+        meta = tf.compat.v1.SummaryMetadata()
         meta.plugin_data.plugin_name = "text"
-        summary = tf.Summary()
+        summary = tf.compat.v1.Summary()
         summary.value.add(tag="Hyper Parameters", metadata=meta, tensor=text_tensor)
         summary_writer.add_summary(summary)

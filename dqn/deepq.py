@@ -313,8 +313,8 @@ if training:
                     shared.log_episode_tensorboard(writer, loss, episode, explore_probability, total_reward, ammo_used,
                                                    monsters_killed, accuracy)
                     # Log to txt file in json
-                    shared.log_episode(json_path, episode, explore_probability, total_reward, ammo_used, monsters_killed,
-                                       accuracy)
+                    shared.log_episode_json(json_path, episode, explore_probability, total_reward, ammo_used, monsters_killed,
+                                            accuracy)
                 else:
                     last_ammo_value = game.get_state().game_variables[0]
                     monsters_killed = game.get_state().game_variables[2]
