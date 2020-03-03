@@ -32,15 +32,15 @@ action_size = game.get_available_buttons_size()  # 7 possible actions
 last_episode = 0
 last_explore_start = 0
 # hyper params
-learning_rate = 0.002  # Alpha (aka learning rate)
-total_episodes = 500  # Total episodes for training
-max_steps = 400  # Max possible steps in an episode
+learning_rate = 0.0002  # Alpha (aka learning rate)
+total_episodes = 51  # Total episodes for training
+max_steps = 2100  # Max possible steps in an episode
 batch_size = 32
 max_tau = 10000  # Tau is the C step where we update our target network FIXED Q TARGETS HYPERPARAMETERS
 explore_start = 1.0  # exploration probability at start EXPLORATION HYPERPARAMETERS for epsilon greedy strategy
 explore_stop = 0.01  # minimum exploration probability
 decay_rate = 0.0001  # 0.00005  # exponential decay rate for exploration prob
-gamma = 0.99  # Discounting rate # Q LEARNING hyperparameters
+gamma = 0.95  # Discounting rate # Q LEARNING hyperparameters
 memory_size = 1000000  # Number of experiences the Memory can keep If you have GPU change to 1million
 
 hyperparameter_dict = {"learning_rate": str(learning_rate),
@@ -403,14 +403,27 @@ if training is True:
                                                monsters_killed,
                                                accuracy)
                     # Log to tensorboard
-                    shared.log_episode_tensorboard(writer=writer,
-                                                   episode=episode,
-                                                   explore_probability=explore_probability,
-                                                   total_reward=total_reward,
-                                                   ammo_used=ammo_used,
-                                                   monsters_killed=monsters_killed,
-                                                   accuracy=accuracy,
+                    writer.close()
+                    writer = tf.summary.FileWriter(writer_path)
+                    shared.log_episode_tensorboard(writer,
+                                                   episode,
+                                                   explore_probability,
+                                                   total_reward,
+                                                   ammo_used,
+                                                   monsters_killed,
+                                                   accuracy,
                                                    loss=loss)
+                    writer.flush()
+                    writer.close()
+
+                    # shared.log_episode_csv(json_path,
+                    #                        episode,
+                    #                        explore_probability,
+                    #                        total_reward,
+                    #                        ammo_used,
+                    #                        monsters_killed,
+                    #                        accuracy,
+                    #                        loss=loss)
                     # Log to txt file in json
                     shared.log_episode_json(json_path,
                                             episode,

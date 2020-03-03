@@ -22,7 +22,32 @@ def calculate_accuracy(frags, ammo_used):
     accuracy = int(accuracy)
     return accuracy
 
-
+def log_episode_csv(path,
+                     episode,
+                     explore_probability,
+                     total_reward,
+                     ammo_used,
+                     monsters_killed,
+                     accuracy,
+                     loss):
+    current_date = datetime.datetime.now().strftime("%d-%m-%Y")
+    current_time = datetime.datetime.now().strftime("%H-%M")
+    output_data = {'episode': str(episode),
+                   'total_reward': str(int(total_reward)),
+                   'loss': str(round(loss,4)),
+                   'explore_probability': str(round(explore_probability,4)),
+                   'ammo_used': str(int(ammo_used)),
+                   'monsters_killed': str(int(monsters_killed)),
+                   'accuracy': str(accuracy),
+                   'date': current_date,
+                   'time': current_time}
+    line = ""
+    for key, value in output_data.items():
+        line = line + value + ","
+    #output_data_as_json = json.dumps(output_data)  # dictionary to json
+    with open(path, 'a') as outfile:
+        outfile.write(line)
+        outfile.write("\n")
 def log_episode_json(path,
                      episode,
                      explore_probability,
@@ -83,22 +108,33 @@ def get_variables():
     # Choose network
     network_input = input("1: DQN\n"
                           "2: DDDQN\n"
-                          "3: Policy Gradient\n")
+                          "3: Policy Gradient\n"
+                          "4: A3C\n")
     if network_input == "1":
         network = "DQN"
     elif network_input == "2":
         network = "DDDQN"
     elif network_input == "3":
         network = "PolicyGradient"
+    elif network_input == "4":
+        network = "A3C"
 
     # Choose game mode
     game_mode_input = input("1: Basic\n"
-                            "2: Defend_the_center\n")
+                            "2: Defend_the_center\n"
+                            "3: predict_position\n"
+                            "4: defend_the_line\n")
     if game_mode_input == "1":
         game_mode = "basic"
         initial_ammo = 50
     elif game_mode_input == "2":
         game_mode = "defend_the_center"
+        initial_ammo = 26
+    elif game_mode_input == "3":
+        game_mode = "predict_position"
+        initial_ammo = 1
+    elif game_mode_input == "4":
+        game_mode = "defend_the_line"
         initial_ammo = 26
 
     # Choose new or previous model
@@ -129,4 +165,17 @@ def log_hyperparameters(writer, hyperpara_dict):
         summary = tf.compat.v1.Summary()
         summary.value.add(tag="Hyper Parameters", metadata=meta, tensor=text_tensor)
         summary_writer.add_summary(summary)
+
+def log_episode(writer, hyperpara_dict,episode):
+    #summary_writer = writer
+    for keys, values in hyperpara_dict.items():
+        #text_to_write = hyperparameter + ": " + value
+        #text_tensor = tf.compat.v1.make_tensor_proto(text_to_write, dtype=tf.string)
+        #meta = tf.compat.v1.SummaryMetadata()
+        #meta.plugin_data.plugin_name = "text"
+        #summary = tf.compat.v1.Summary()
+        summary = tf.compat.v1.Summary(value=[tf.compat.v1.Summary.Value(tag=keys, simple_value=values)])
+        #summary.value.add(tag="Hyper Parameters", metadata=meta, tensor=text_tensor)
+        writer.add_summary(summary, episode)
+
 

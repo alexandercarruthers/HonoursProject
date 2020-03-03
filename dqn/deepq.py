@@ -7,14 +7,16 @@ from collections import deque  # Ordered collection with ends
 import warnings  # This ignore all the warning messages that are normally printed during the training because of skimage
 import json  # for hyperparameters
 from dqn import shared
+
 warnings.filterwarnings('ignore')
 
 
 def create_environment():
     game = vizdoom.DoomGame()  # Load the correct configuration
-    game.load_config("../scenarios/" + game_mode + ".cfg") # Load the correct scenario (in our case basic scenario)
+    game.load_config("../scenarios/" + game_mode + ".cfg")  # Load the correct scenario (in our case basic scenario)
     game.set_doom_scenario_path("../scenarios/" + game_mode + ".wad")
     game.add_available_game_variable(vizdoom.GameVariable.AMMO2)
+
     game.init()
     # Here our possible actions
     left = [1, 0, 0]  # Can also be True, False, False
@@ -72,7 +74,8 @@ class DQNetwork:
             # [None, 84, 84, 4]
             self.inputs_ = tf.compat.v1.placeholder(tf.float32, [None, *state_size], name="inputs")
             self.actions_ = tf.compat.v1.placeholder(tf.float32, [None, 3], name="actions_")
-            self.target_Q = tf.compat.v1.placeholder(tf.float32, [None], name="target")  # Remember that target_Q is the R(s,a) + ymax Qhat(s', a')
+            self.target_Q = tf.compat.v1.placeholder(tf.float32, [None],
+                                                     name="target")  # Remember that target_Q is the R(s,a) + ymax Qhat(s', a')
             # First convnet: CNN ReLU
             # Input is 84x84x4
             self.conv1 = tf.layers.conv2d(inputs=self.inputs_, filters=32, kernel_size=[8, 8], strides=[4, 4],
@@ -89,7 +92,7 @@ class DQNetwork:
             self.conv2_out = tf.nn.relu(self.conv2, name="conv2_out")
             ## --> [9, 9, 64]
             # Third convnet: CNN ReLU
-            self.conv3 = tf.layers.conv2d(inputs=self.conv2_out, filters=64, kernel_size=[3, 3], strides=[1, 1],
+            self.conv3 = tf.layers.conv2d(inputs=self.conv2_out, filters=64, kernel_size=[4, 4], strides=[1, 1],
                                           padding="VALID",
                                           kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
                                           name="conv3")
@@ -137,16 +140,15 @@ last_explore_start = 0
 state_size = [84, 84, 4]  # Our input is a stack of 4 frames hence 84x84x4 (Width, height, channels)
 action_size = game.get_available_buttons_size()  # 3 possible actions: left, right, shoot
 # TRAINING HYPERPARAMETERS
-learning_rate = 0.00025  # Alpha (aka learning rate)
-total_episodes = 500  # Total episodes for training
-max_steps = 300  # Max possible steps in an episode
+learning_rate = 0.0002  # Alpha (aka learning rate)
+total_episodes = 10  # Total episodes for training
+max_steps = 2100  # Max possible steps in an episode
 batch_size = 32
 explore_start = 1.0  # exploration probability at start
 explore_stop = 0.01  # minimum exploration probability
 decay_rate = 0.0001  # 00 #0  # exponential decay rate for exploration prob
-gamma = 0.99  # Discounting rate for Q learning
+gamma = 0.95  # Discounting rate for Q learning
 memory_size = 1000000  # Number of experiences the Memory can keep 1 million
-
 hyperparameter_dict = {"learning_rate": str(learning_rate),
                        "total_episodes": str(total_episodes),
                        "max_steps": str(max_steps),
@@ -178,20 +180,20 @@ for i in range(pretrain_length):
     reward = game.make_action(action)  # Get the rewards
     done = game.is_episode_finished()
     if done:  # If we're dead
-        next_state = np.zeros(state.shape) # We finished the episode
+        next_state = np.zeros(state.shape)  # We finished the episode
         memory.add((state, action, reward, next_state, done))  # Add experience to memory
-        game.new_episode() # Start a new episode
+        game.new_episode()  # Start a new episode
         state = game.get_state().screen_buffer  # First we need a state
         state, stacked_frames = stack_frames(stacked_frames, state, True)  # Stack the frames
     else:
-        next_state = game.get_state().screen_buffer # Get the next state
+        next_state = game.get_state().screen_buffer  # Get the next state
         next_state, stacked_frames = stack_frames(stacked_frames, next_state, False)
-        memory.add((state, action, reward, next_state, done)) # Add experience to memory
-        state = next_state # Our state is now the next_state
+        memory.add((state, action, reward, next_state, done))  # Add experience to memory
+        state = next_state  # Our state is now the next_state
 
 tf.compat.v1.summary.scalar("Loss", DQNetwork.loss)  # Losses
 write_op = tf.compat.v1.summary.merge_all()
-saver = tf.compat.v1.train.Saver() # Saver will help us to save our model
+saver = tf.compat.v1.train.Saver()  # Saver will help us to save our model
 
 if training:
     with tf.compat.v1.Session() as sess:
@@ -203,30 +205,31 @@ if training:
             saver.restore(sess, log_path)
             # restore last hyper parameters
             lines = [line.rstrip('\n') for line in open(json_path)]
-            last_line = json.loads(lines[-1])
-            last_episode = last_line['episode']
-            last_explore_start = float(last_line['explore_probability'])  # saved as a string need to be a float
+            last_line = lines[-1]
+            last_episode = int(last_line.split(',')[0])
+            last_explore_start = float(last_line.split(',')[3])  # saved as a string need to be a float
             explore_start = last_explore_start
         decay_step = 0  # Initialize the decay rate (that will use to reduce epsilon)
-        game.init() # Init the game
+        game.init()  # Init the game
         next_episode = last_episode + 1
         for episode in range(next_episode, total_episodes + next_episode):
             step = 0
             episode_rewards = []  # Initialize the rewards of the episode
             game.new_episode()  # Make a new episode and observe the first state
-            state = game.get_state().screen_buffer # that stack frame function also calls our preprocess function.
+            state = game.get_state().screen_buffer  # that stack frame function also calls our preprocess function.
             state, stacked_frames = stack_frames(stacked_frames, state, True)
             last_ammo_value = 0
             monsters_killed = 0
             while step < max_steps:
                 step += 1
-                decay_step += 1 # Increase decay_step
+                decay_step += 1  # Increase decay_step
                 # Predict the action to take and take it
-                action, explore_probability = predict_action(explore_start, explore_stop, decay_rate, decay_step, state, possible_actions)
-                reward = game.make_action(action) # Do the action
-                done = game.is_episode_finished() # Look if the episode is finished
-                episode_rewards.append(reward) # Add the reward to total reward
-                if done: # If the game is finished
+                action, explore_probability = predict_action(explore_start, explore_stop, decay_rate, decay_step, state,
+                                                             possible_actions)
+                reward = game.make_action(action)  # Do the action
+                done = game.is_episode_finished()  # Look if the episode is finished
+                episode_rewards.append(reward)  # Add the reward to total reward
+                if done:  # If the game is finished
                     next_state = np.zeros((84, 84), dtype=np.int)
                     next_state, stacked_frames = stack_frames(stacked_frames, next_state, False)
                     step = max_steps  # Set step = max_steps to end the episode
@@ -244,6 +247,17 @@ if training:
                                                monsters_killed,
                                                accuracy)
                     # Log to tensorboard
+                    episode_dict = {"loss": loss,
+                                    "explore_probability": explore_probability,
+                                    "total_reward": total_reward,
+                                    "ammo_used": ammo_used,
+                                    "monsters_killed": monsters_killed,
+                                    "accuracy": accuracy
+                                    }
+                    # writer = tf.summary.FileWriter(writer_path)
+                    # shared.log_episode(writer=writer, hyperpara_dict=episode_dict,episode=episode)
+                    # writer.close()
+                    writer = tf.summary.FileWriter(writer_path)
                     shared.log_episode_tensorboard(writer,
                                                    episode,
                                                    explore_probability,
@@ -252,23 +266,25 @@ if training:
                                                    monsters_killed,
                                                    accuracy,
                                                    loss=loss)
+                    writer.close()
+
                     # Log to txt file in json
-                    shared.log_episode_json(json_path,
-                                            episode,
-                                            explore_probability,
-                                            total_reward,
-                                            ammo_used,
-                                            monsters_killed,
-                                            accuracy,
-                                            loss=loss)
+                    shared.log_episode_csv(json_path,
+                                           episode,
+                                           explore_probability,
+                                           total_reward,
+                                           ammo_used,
+                                           monsters_killed,
+                                           accuracy,
+                                           loss=loss)
                 else:
                     last_ammo_value = game.get_state().game_variables[0]
                     monsters_killed = game.get_state().game_variables[2]
-                    next_state = game.get_state().screen_buffer # Get the next state
+                    next_state = game.get_state().screen_buffer  # Get the next state
                     # Stack the frame of the next_state
                     next_state, stacked_frames = stack_frames(stacked_frames, next_state, False)
                     memory.add((state, action, reward, next_state, done))  # Add experience to memory
-                    state = next_state # st+1 is now our current state
+                    state = next_state  # st+1 is now our current state
                 # LEARNING PART
                 # Obtain random mini-batch from memory
                 batch = memory.sample(batch_size)
