@@ -310,7 +310,10 @@ class Worker():
 
 game_mode, network, initial_ammo, new, log_path, json_path, writer_path = shared.get_variables()
 max_episode_length = 300
-gamma = .99 # discount rate for advantage estimation and reward discounting
+gamma = 0.99 # discount rate for advantage estimation and reward discounting
+hyperparameter_dict = {"gamma": str(gamma)}
+writer = tf.compat.v1.summary.FileWriter(writer_path)
+shared.log_hyperparameters(writer=writer, hyperpara_dict=hyperparameter_dict)
 s_size = 7056 # Observations are greyscale frames of 84 * 84 * 1
 a_size = 3 # Agent can move Left, Right, or Fire
 load_model = False
