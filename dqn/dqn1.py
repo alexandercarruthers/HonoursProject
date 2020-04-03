@@ -17,8 +17,6 @@ warnings.filterwarnings('ignore')
 game_mode = "basic"
 def create_environment():
     game = vizdoom.DoomGame()
-
-
     game.load_config("../scenarios/" + game_mode + ".cfg")
     game.set_doom_scenario_path("../scenarios/" + game_mode + ".wad")
     #game.load_config("basic.cfg")

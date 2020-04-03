@@ -140,14 +140,14 @@ last_explore_start = 0
 state_size = [84, 84, 4]  # Our input is a stack of 4 frames hence 84x84x4 (Width, height, channels)
 action_size = game.get_available_buttons_size()  # 3 possible actions: left, right, shoot
 # TRAINING HYPERPARAMETERS
-learning_rate = 0.0002  # Alpha (aka learning rate)
-total_episodes = 10  # Total episodes for training
+learning_rate = 0.00005  # Alpha (aka learning rate)
+total_episodes = 501  # Total episodes for training
 max_steps = 2100  # Max possible steps in an episode
-batch_size = 32
-explore_start = 1.0  # exploration probability at start
-explore_stop = 0.01  # minimum exploration probability
-decay_rate = 0.0001  # 00 #0  # exponential decay rate for exploration prob
-gamma = 0.95  # Discounting rate for Q learning
+batch_size = 128
+explore_start = 0.1  # exploration probability at start
+explore_stop = 0.0001  # minimum exploration probability
+decay_rate = 0.00001  # 00 #0  # exponential decay rate for exploration prob
+gamma = 0.9999  # Discounting rate for Q learning
 memory_size = 1000000  # Number of experiences the Memory can keep 1 million
 hyperparameter_dict = {"learning_rate": str(learning_rate),
                        "total_episodes": str(total_episodes),
@@ -157,7 +157,8 @@ hyperparameter_dict = {"learning_rate": str(learning_rate),
                        "explore_stop": str(explore_stop),
                        "decay_rate": str(decay_rate),
                        "gamma": str(gamma),
-                       "memory_size": str(memory_size)
+                       "memory_size": str(memory_size),
+                       "learning_rate2": str(learning_rate)
                        }
 shared.log_hyperparameters(writer=writer, hyperpara_dict=hyperparameter_dict)
 # MEMORY HYPERPARAMETERS
