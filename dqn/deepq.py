@@ -141,13 +141,13 @@ state_size = [84, 84, 4]  # Our input is a stack of 4 frames hence 84x84x4 (Widt
 action_size = game.get_available_buttons_size()  # 3 possible actions: left, right, shoot
 # TRAINING HYPERPARAMETERS
 learning_rate = 0.00005  # Alpha (aka learning rate)
-total_episodes = 501  # Total episodes for training
+total_episodes = 5000  # Total episodes for training
 max_steps = 2100  # Max possible steps in an episode
 batch_size = 128
 explore_start = 0.1  # exploration probability at start
 explore_stop = 0.0001  # minimum exploration probability
 decay_rate = 0.00001  # 00 #0  # exponential decay rate for exploration prob
-gamma = 0.9999  # Discounting rate for Q learning
+gamma = 0.95  # Discounting rate for Q learning
 memory_size = 1000000  # Number of experiences the Memory can keep 1 million
 hyperparameter_dict = {"learning_rate": str(learning_rate),
                        "total_episodes": str(total_episodes),
@@ -163,7 +163,7 @@ hyperparameter_dict = {"learning_rate": str(learning_rate),
 shared.log_hyperparameters(writer=writer, hyperpara_dict=hyperparameter_dict)
 # MEMORY HYPERPARAMETERS
 pretrain_length = batch_size  # Number of experiences stored in the Memory when initialized for the first time
-training = True  # MODIFY THIS TO FALSE IF YOU JUST WANT TO SEE THE TRAINED AGENT
+training = False  # MODIFY THIS TO FALSE IF YOU JUST WANT TO SEE THE TRAINED AGENT
 episode_render = True  # TURN THIS TO TRUE IF YOU WANT TO RENDER THE ENVIRONMENT
 stack_size = 4  # We stack 4 frames
 # Initialize deque with zero-images one array for each image
@@ -322,11 +322,12 @@ if training:
                 print("Model Saved")
 
 with tf.compat.v1.Session() as sess:
+    test_episodes = 1000
     game, possible_actions = create_environment()
     totalScore = 0
     saver.restore(sess, log_path)
     game.init()
-    for i in range(10):
+    for i in range(test_episodes):
         done = False
         game.new_episode()
         state = game.get_state().screen_buffer
@@ -347,5 +348,5 @@ with tf.compat.v1.Session() as sess:
                 next_state, stacked_frames = stack_frames(stacked_frames, next_state, False)
                 state = next_state
         score = game.get_total_reward()
-        print("Score: ", score)
+        print(score)
     game.close()

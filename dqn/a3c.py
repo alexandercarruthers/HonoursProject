@@ -1,7 +1,6 @@
 import threading
 import multiprocessing
 import scipy.signal
-
 from dqn import shared
 from dqn.helper import *
 import vizdoom
@@ -13,15 +12,14 @@ from skimage.transform import resize
 def update_target_graph(from_scope,to_scope):
     from_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, from_scope)
     to_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, to_scope)
-
     op_holder = []
     for from_var,to_var in zip(from_vars,to_vars):
         op_holder.append(to_var.assign(from_var))
     return op_holder
 
-# Processes Doom screen image to produce cropped and resized image.
+
 def process_frame(frame):
-    s = frame[10:-10,30:-30]
+    s = frame
     s = resize(s,[84,84])
     s = np.reshape(s,[np.prod(s.shape)]) / 255.0
     return s
@@ -30,7 +28,8 @@ def process_frame(frame):
 def discount(x, gamma):
     return scipy.signal.lfilter([1], [1, -gamma], x[::-1], axis=0)[::-1]
 
-#Used to initialize weights for policy and value output layers
+
+# Used to initialize weights for policy and value output layers
 def normalized_columns_initializer(std=1.0):
     def _initializer(shape, dtype=None, partition_info=None):
         out = np.random.randn(*shape).astype(np.float32)
@@ -203,6 +202,7 @@ class Worker():
                 episode_values = []
                 episode_frames = []
                 episode_reward = 0
+                episode_rewards = []
                 episode_step_count = 0
                 d = False
                 self.env.new_episode()
@@ -220,7 +220,9 @@ class Worker():
                                    self.local_AC.state_in[1]: rnn_state[1]})
                     a = np.random.choice(a_dist[0], p=a_dist[0])
                     a = np.argmax(a_dist == a)
-                    r = self.env.make_action(self.actions[a]) / 100.0
+                    reward = self.env.make_action(self.actions[a])
+                    episode_rewards.append(reward)
+                    r = reward / 100.0
                     d = self.env.is_episode_finished()
                     if d == False:
                         s1 = self.env.get_state().screen_buffer
@@ -286,31 +288,39 @@ class Worker():
                 if self.name == 'worker_0':
                     sess.run(self.increment)
                     #only print for worker 0
+                    try:
+                        total_reward = np.sum(episode_rewards)
+                    except UnboundLocalError:
+                        total_reward = 0
                     current_ammo = self.env.get_game_variable(vizdoom.GameVariable.AMMO2)
                     current_health = self.env.get_game_variable(vizdoom.GameVariable.HEALTH)
                     current_killcount = self.env.get_game_variable(vizdoom.GameVariable.KILLCOUNT)
-
-                    print("ammo: " + str(current_ammo))
-                    print("health: " + str(current_health))
-                    print("kill: " + str(current_killcount))
                     ammo_used = initial_ammo - current_ammo
-                    print("ammo used: " + str(ammo_used))
                     accuracy = shared.calculate_accuracy(current_killcount,ammo_used)
-                    print("accuracy: " + str(accuracy))
+                    # log to std out
+                    shared.log_episode_std_out(loss=0,
+                                               episode=episode_count,
+                                               explore_probability=0,
+                                               total_reward=total_reward,
+                                               ammo_used=ammo_used,
+                                               monsters_killed=current_killcount,
+                                               accuracy=accuracy)
+
                     writer = tf.summary.FileWriter(writer_path)
                     shared.log_episode_tensorboard(writer,
                                                    episode_count,
                                                    explore_probability=0,
-                                                   total_reward=0,
+                                                   total_reward=total_reward,
                                                    ammo_used=ammo_used,
                                                    monsters_killed=current_killcount,
                                                    accuracy=accuracy,
-                                                   loss=0)
+                                                   loss=0
+                                                   )
                 episode_count += 1
 
 game_mode, network, initial_ammo, new, log_path, json_path, writer_path = shared.get_variables()
-max_episode_length = 300
-gamma = 0.99 # discount rate for advantage estimation and reward discounting
+max_episode_length = 2100
+gamma = 0.95 # discount rate for advantage estimation and reward discounting
 hyperparameter_dict = {"gamma": str(gamma)}
 writer = tf.compat.v1.summary.FileWriter(writer_path)
 shared.log_hyperparameters(writer=writer, hyperpara_dict=hyperparameter_dict)
@@ -329,7 +339,8 @@ if not os.path.exists('./frames'):
     os.makedirs('./frames')
 
 with tf.device("/cpu:0"):
-    global_episodes = tf.Variable(0, dtype=tf.int32, name='global_episodes', trainable=False)
+    episode_start = 1018
+    global_episodes = tf.Variable(episode_start, dtype=tf.int32, name='global_episodes', trainable=False)
     trainer = tf.train.AdamOptimizer(learning_rate=1e-4)
     master_network = AC_Network(s_size, a_size, 'global', None)  # Generate global network
     num_workers = multiprocessing.cpu_count()  # Set workers to number of available CPU threads

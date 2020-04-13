@@ -32,14 +32,14 @@ action_size = game.get_available_buttons_size()  # 7 possible actions
 last_episode = 0
 last_explore_start = 0
 # hyper params
-learning_rate = 0.0002  # Alpha (aka learning rate)
-total_episodes = 51  # Total episodes for training
+learning_rate = 0.00005  # Alpha (aka learning rate)
+total_episodes = 757  # Total episodes for training
 max_steps = 2100  # Max possible steps in an episode
-batch_size = 32
+batch_size = 128
 max_tau = 10000  # Tau is the C step where we update our target network FIXED Q TARGETS HYPERPARAMETERS
-explore_start = 1.0  # exploration probability at start EXPLORATION HYPERPARAMETERS for epsilon greedy strategy
-explore_stop = 0.01  # minimum exploration probability
-decay_rate = 0.0001  # 0.00005  # exponential decay rate for exploration prob
+explore_start = 0.1  # exploration probability at start EXPLORATION HYPERPARAMETERS for epsilon greedy strategy
+explore_stop = 0.0001  # minimum exploration probability
+decay_rate = 0.00001  # 0.00005  # exponential decay rate for exploration prob
 gamma = 0.95  # Discounting rate # Q LEARNING hyperparameters
 memory_size = 1000000  # Number of experiences the Memory can keep If you have GPU change to 1million
 
@@ -57,7 +57,7 @@ hyperparameter_dict = {"learning_rate": str(learning_rate),
 shared.log_hyperparameters(writer=writer, hyperpara_dict=hyperparameter_dict)
 
 pretrain_length = batch_size  # 100000  # Number of experiences stored in the Memory when initialized for the first time
-training = True  # MODIFY THIS TO FALSE IF YOU JUST WANT TO SEE THE TRAINED AGENT
+training = False  # MODIFY THIS TO FALSE IF YOU JUST WANT TO SEE THE TRAINED AGENT
 episode_render = False  # TURN THIS TO TRUE IF YOU WANT TO RENDER THE ENVIRONMENT
 
 
@@ -503,20 +503,17 @@ if training is True:
                 print("Model Saved")
 
 with tf.Session() as sess:
+    test_episodes = 1000
     game = vizdoom.DoomGame()
-    # Load the correct configuration (TESTING)
     game.load_config("../scenarios/" + game_mode + ".cfg")
-    # Load the correct scenario (in our case deadly_corridor scenario)
     game.set_doom_scenario_path("../scenarios/" + game_mode + ".wad")
     game.init()
-    # Load the model
-    saver.restore(sess, "./models/model.ckpt")
+    saver.restore(sess, log_path)
     game.init()
-    for i in range(10):
+    for i in range(test_episodes):
         game.new_episode()
         state = game.get_state().screen_buffer
         state, stacked_frames = stack_frames(stacked_frames, state, True)
-
         while not game.is_episode_finished():
             ## EPSILON GREEDY STRATEGY
             # Choose action a from state s using epsilon greedy.
@@ -542,5 +539,5 @@ with tf.Session() as sess:
                 next_state, stacked_frames = stack_frames(stacked_frames, next_state, False)
                 state = next_state
         score = game.get_total_reward()
-        print("Score: ", score)
+        print(score)
     game.close()
